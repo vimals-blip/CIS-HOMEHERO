@@ -10,33 +10,102 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ProvidersProviderIdRouteImport } from './routes/providers.$providerId'
+import { Route as BookCategoryIdRouteImport } from './routes/book.$categoryId'
+import { Route as AuthSignupProviderRouteImport } from './routes/auth.signup-provider'
+import { Route as AuthSignupCustomerRouteImport } from './routes/auth.signup-customer'
+import { Route as AuthLoginRouteImport } from './routes/auth.login'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProvidersProviderIdRoute = ProvidersProviderIdRouteImport.update({
+  id: '/providers/$providerId',
+  path: '/providers/$providerId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BookCategoryIdRoute = BookCategoryIdRouteImport.update({
+  id: '/book/$categoryId',
+  path: '/book/$categoryId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthSignupProviderRoute = AuthSignupProviderRouteImport.update({
+  id: '/auth/signup-provider',
+  path: '/auth/signup-provider',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthSignupCustomerRoute = AuthSignupCustomerRouteImport.update({
+  id: '/auth/signup-customer',
+  path: '/auth/signup-customer',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthLoginRoute = AuthLoginRouteImport.update({
+  id: '/auth/login',
+  path: '/auth/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/auth/login': typeof AuthLoginRoute
+  '/auth/signup-customer': typeof AuthSignupCustomerRoute
+  '/auth/signup-provider': typeof AuthSignupProviderRoute
+  '/book/$categoryId': typeof BookCategoryIdRoute
+  '/providers/$providerId': typeof ProvidersProviderIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/auth/login': typeof AuthLoginRoute
+  '/auth/signup-customer': typeof AuthSignupCustomerRoute
+  '/auth/signup-provider': typeof AuthSignupProviderRoute
+  '/book/$categoryId': typeof BookCategoryIdRoute
+  '/providers/$providerId': typeof ProvidersProviderIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/auth/login': typeof AuthLoginRoute
+  '/auth/signup-customer': typeof AuthSignupCustomerRoute
+  '/auth/signup-provider': typeof AuthSignupProviderRoute
+  '/book/$categoryId': typeof BookCategoryIdRoute
+  '/providers/$providerId': typeof ProvidersProviderIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/auth/login'
+    | '/auth/signup-customer'
+    | '/auth/signup-provider'
+    | '/book/$categoryId'
+    | '/providers/$providerId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/auth/login'
+    | '/auth/signup-customer'
+    | '/auth/signup-provider'
+    | '/book/$categoryId'
+    | '/providers/$providerId'
+  id:
+    | '__root__'
+    | '/'
+    | '/auth/login'
+    | '/auth/signup-customer'
+    | '/auth/signup-provider'
+    | '/book/$categoryId'
+    | '/providers/$providerId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuthLoginRoute: typeof AuthLoginRoute
+  AuthSignupCustomerRoute: typeof AuthSignupCustomerRoute
+  AuthSignupProviderRoute: typeof AuthSignupProviderRoute
+  BookCategoryIdRoute: typeof BookCategoryIdRoute
+  ProvidersProviderIdRoute: typeof ProvidersProviderIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,22 +117,52 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/providers/$providerId': {
+      id: '/providers/$providerId'
+      path: '/providers/$providerId'
+      fullPath: '/providers/$providerId'
+      preLoaderRoute: typeof ProvidersProviderIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/book/$categoryId': {
+      id: '/book/$categoryId'
+      path: '/book/$categoryId'
+      fullPath: '/book/$categoryId'
+      preLoaderRoute: typeof BookCategoryIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/signup-provider': {
+      id: '/auth/signup-provider'
+      path: '/auth/signup-provider'
+      fullPath: '/auth/signup-provider'
+      preLoaderRoute: typeof AuthSignupProviderRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/signup-customer': {
+      id: '/auth/signup-customer'
+      path: '/auth/signup-customer'
+      fullPath: '/auth/signup-customer'
+      preLoaderRoute: typeof AuthSignupCustomerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/login': {
+      id: '/auth/login'
+      path: '/auth/login'
+      fullPath: '/auth/login'
+      preLoaderRoute: typeof AuthLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuthLoginRoute: AuthLoginRoute,
+  AuthSignupCustomerRoute: AuthSignupCustomerRoute,
+  AuthSignupProviderRoute: AuthSignupProviderRoute,
+  BookCategoryIdRoute: BookCategoryIdRoute,
+  ProvidersProviderIdRoute: ProvidersProviderIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
