@@ -13,6 +13,7 @@ import { Route as BookingsRouteImport } from './routes/bookings'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ProviderIndexRouteImport } from './routes/provider.index'
 import { Route as ProvidersProviderIdRouteImport } from './routes/providers.$providerId'
+import { Route as ProviderJobsRouteImport } from './routes/provider.jobs'
 import { Route as BookCategoryIdRouteImport } from './routes/book.$categoryId'
 import { Route as AuthSignupProviderRouteImport } from './routes/auth.signup-provider'
 import { Route as AuthSignupCustomerRouteImport } from './routes/auth.signup-customer'
@@ -36,6 +37,11 @@ const ProviderIndexRoute = ProviderIndexRouteImport.update({
 const ProvidersProviderIdRoute = ProvidersProviderIdRouteImport.update({
   id: '/providers/$providerId',
   path: '/providers/$providerId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProviderJobsRoute = ProviderJobsRouteImport.update({
+  id: '/provider/jobs',
+  path: '/provider/jobs',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BookCategoryIdRoute = BookCategoryIdRouteImport.update({
@@ -66,6 +72,7 @@ export interface FileRoutesByFullPath {
   '/auth/signup-customer': typeof AuthSignupCustomerRoute
   '/auth/signup-provider': typeof AuthSignupProviderRoute
   '/book/$categoryId': typeof BookCategoryIdRoute
+  '/provider/jobs': typeof ProviderJobsRoute
   '/providers/$providerId': typeof ProvidersProviderIdRoute
   '/provider/': typeof ProviderIndexRoute
 }
@@ -76,6 +83,7 @@ export interface FileRoutesByTo {
   '/auth/signup-customer': typeof AuthSignupCustomerRoute
   '/auth/signup-provider': typeof AuthSignupProviderRoute
   '/book/$categoryId': typeof BookCategoryIdRoute
+  '/provider/jobs': typeof ProviderJobsRoute
   '/providers/$providerId': typeof ProvidersProviderIdRoute
   '/provider': typeof ProviderIndexRoute
 }
@@ -87,6 +95,7 @@ export interface FileRoutesById {
   '/auth/signup-customer': typeof AuthSignupCustomerRoute
   '/auth/signup-provider': typeof AuthSignupProviderRoute
   '/book/$categoryId': typeof BookCategoryIdRoute
+  '/provider/jobs': typeof ProviderJobsRoute
   '/providers/$providerId': typeof ProvidersProviderIdRoute
   '/provider/': typeof ProviderIndexRoute
 }
@@ -99,6 +108,7 @@ export interface FileRouteTypes {
     | '/auth/signup-customer'
     | '/auth/signup-provider'
     | '/book/$categoryId'
+    | '/provider/jobs'
     | '/providers/$providerId'
     | '/provider/'
   fileRoutesByTo: FileRoutesByTo
@@ -109,6 +119,7 @@ export interface FileRouteTypes {
     | '/auth/signup-customer'
     | '/auth/signup-provider'
     | '/book/$categoryId'
+    | '/provider/jobs'
     | '/providers/$providerId'
     | '/provider'
   id:
@@ -119,6 +130,7 @@ export interface FileRouteTypes {
     | '/auth/signup-customer'
     | '/auth/signup-provider'
     | '/book/$categoryId'
+    | '/provider/jobs'
     | '/providers/$providerId'
     | '/provider/'
   fileRoutesById: FileRoutesById
@@ -130,6 +142,7 @@ export interface RootRouteChildren {
   AuthSignupCustomerRoute: typeof AuthSignupCustomerRoute
   AuthSignupProviderRoute: typeof AuthSignupProviderRoute
   BookCategoryIdRoute: typeof BookCategoryIdRoute
+  ProviderJobsRoute: typeof ProviderJobsRoute
   ProvidersProviderIdRoute: typeof ProvidersProviderIdRoute
   ProviderIndexRoute: typeof ProviderIndexRoute
 }
@@ -162,6 +175,13 @@ declare module '@tanstack/react-router' {
       path: '/providers/$providerId'
       fullPath: '/providers/$providerId'
       preLoaderRoute: typeof ProvidersProviderIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/provider/jobs': {
+      id: '/provider/jobs'
+      path: '/provider/jobs'
+      fullPath: '/provider/jobs'
+      preLoaderRoute: typeof ProviderJobsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/book/$categoryId': {
@@ -202,6 +222,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthSignupCustomerRoute: AuthSignupCustomerRoute,
   AuthSignupProviderRoute: AuthSignupProviderRoute,
   BookCategoryIdRoute: BookCategoryIdRoute,
+  ProviderJobsRoute: ProviderJobsRoute,
   ProvidersProviderIdRoute: ProvidersProviderIdRoute,
   ProviderIndexRoute: ProviderIndexRoute,
 }
