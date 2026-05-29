@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as BookingsRouteImport } from './routes/bookings'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ProvidersProviderIdRouteImport } from './routes/providers.$providerId'
 import { Route as BookCategoryIdRouteImport } from './routes/book.$categoryId'
@@ -16,6 +17,11 @@ import { Route as AuthSignupProviderRouteImport } from './routes/auth.signup-pro
 import { Route as AuthSignupCustomerRouteImport } from './routes/auth.signup-customer'
 import { Route as AuthLoginRouteImport } from './routes/auth.login'
 
+const BookingsRoute = BookingsRouteImport.update({
+  id: '/bookings',
+  path: '/bookings',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -49,6 +55,7 @@ const AuthLoginRoute = AuthLoginRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/bookings': typeof BookingsRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup-customer': typeof AuthSignupCustomerRoute
   '/auth/signup-provider': typeof AuthSignupProviderRoute
@@ -57,6 +64,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/bookings': typeof BookingsRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup-customer': typeof AuthSignupCustomerRoute
   '/auth/signup-provider': typeof AuthSignupProviderRoute
@@ -66,6 +74,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/bookings': typeof BookingsRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup-customer': typeof AuthSignupCustomerRoute
   '/auth/signup-provider': typeof AuthSignupProviderRoute
@@ -76,6 +85,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/bookings'
     | '/auth/login'
     | '/auth/signup-customer'
     | '/auth/signup-provider'
@@ -84,6 +94,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/bookings'
     | '/auth/login'
     | '/auth/signup-customer'
     | '/auth/signup-provider'
@@ -92,6 +103,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/bookings'
     | '/auth/login'
     | '/auth/signup-customer'
     | '/auth/signup-provider'
@@ -101,6 +113,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  BookingsRoute: typeof BookingsRoute
   AuthLoginRoute: typeof AuthLoginRoute
   AuthSignupCustomerRoute: typeof AuthSignupCustomerRoute
   AuthSignupProviderRoute: typeof AuthSignupProviderRoute
@@ -110,6 +123,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/bookings': {
+      id: '/bookings'
+      path: '/bookings'
+      fullPath: '/bookings'
+      preLoaderRoute: typeof BookingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -157,6 +177,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  BookingsRoute: BookingsRoute,
   AuthLoginRoute: AuthLoginRoute,
   AuthSignupCustomerRoute: AuthSignupCustomerRoute,
   AuthSignupProviderRoute: AuthSignupProviderRoute,
