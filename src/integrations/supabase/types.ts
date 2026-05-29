@@ -235,6 +235,27 @@ export type Database = {
           },
         ]
       }
+      profile_contacts: {
+        Row: {
+          created_at: string
+          phone: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          phone?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          phone?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -242,7 +263,6 @@ export type Database = {
           created_at: string
           id: string
           name: string | null
-          phone: string | null
           updated_at: string
         }
         Insert: {
@@ -251,7 +271,6 @@ export type Database = {
           created_at?: string
           id: string
           name?: string | null
-          phone?: string | null
           updated_at?: string
         }
         Update: {
@@ -260,7 +279,6 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string | null
-          phone?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -333,6 +351,33 @@ export type Database = {
           },
         ]
       }
+      provider_payouts: {
+        Row: {
+          bank_account_number: string | null
+          bank_ifsc: string | null
+          bank_name: string | null
+          created_at: string
+          provider_id: string
+          updated_at: string
+        }
+        Insert: {
+          bank_account_number?: string | null
+          bank_ifsc?: string | null
+          bank_name?: string | null
+          created_at?: string
+          provider_id: string
+          updated_at?: string
+        }
+        Update: {
+          bank_account_number?: string | null
+          bank_ifsc?: string | null
+          bank_name?: string | null
+          created_at?: string
+          provider_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       provider_wallet: {
         Row: {
           available_balance: number
@@ -365,9 +410,6 @@ export type Database = {
       providers: {
         Row: {
           avg_rating: number | null
-          bank_account_number: string | null
-          bank_ifsc: string | null
-          bank_name: string | null
           bio: string | null
           created_at: string
           experience_years: number | null
@@ -380,9 +422,6 @@ export type Database = {
         }
         Insert: {
           avg_rating?: number | null
-          bank_account_number?: string | null
-          bank_ifsc?: string | null
-          bank_name?: string | null
           bio?: string | null
           created_at?: string
           experience_years?: number | null
@@ -395,9 +434,6 @@ export type Database = {
         }
         Update: {
           avg_rating?: number | null
-          bank_account_number?: string | null
-          bank_ifsc?: string | null
-          bank_name?: string | null
           bio?: string | null
           created_at?: string
           experience_years?: number | null

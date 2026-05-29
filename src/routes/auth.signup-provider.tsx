@@ -71,7 +71,10 @@ function SignupProvider() {
 
     const userId = signup.user.id;
     // best-effort updates; RLS allows self insert/update
-    await supabase.from("profiles").upsert({ id: userId, name: info.name, phone: info.phone, city: info.city });
+    await supabase.from("profiles").upsert({ id: userId, name: info.name, city: info.city });
+    if (info.phone) {
+      await supabase.from("profile_contacts").upsert({ user_id: userId, phone: info.phone });
+    }
     await supabase.from("providers").insert({
       id: userId, bio: info.bio, experience_years: info.experience,
       hourly_rate: info.hourlyRate, status: "OFFLINE",
