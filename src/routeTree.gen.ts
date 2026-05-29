@@ -9,21 +9,45 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as BookingsRouteImport } from './routes/bookings'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ProviderIndexRouteImport } from './routes/provider.index'
+import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as ProvidersProviderIdRouteImport } from './routes/providers.$providerId'
+import { Route as ProviderJobsRouteImport } from './routes/provider.jobs'
 import { Route as BookCategoryIdRouteImport } from './routes/book.$categoryId'
 import { Route as AuthSignupProviderRouteImport } from './routes/auth.signup-provider'
 import { Route as AuthSignupCustomerRouteImport } from './routes/auth.signup-customer'
 import { Route as AuthLoginRouteImport } from './routes/auth.login'
 
+const BookingsRoute = BookingsRouteImport.update({
+  id: '/bookings',
+  path: '/bookings',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProviderIndexRoute = ProviderIndexRouteImport.update({
+  id: '/provider/',
+  path: '/provider/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/admin/',
+  path: '/admin/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProvidersProviderIdRoute = ProvidersProviderIdRouteImport.update({
   id: '/providers/$providerId',
   path: '/providers/$providerId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProviderJobsRoute = ProviderJobsRouteImport.update({
+  id: '/provider/jobs',
+  path: '/provider/jobs',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BookCategoryIdRoute = BookCategoryIdRouteImport.update({
@@ -49,67 +73,102 @@ const AuthLoginRoute = AuthLoginRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/bookings': typeof BookingsRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup-customer': typeof AuthSignupCustomerRoute
   '/auth/signup-provider': typeof AuthSignupProviderRoute
   '/book/$categoryId': typeof BookCategoryIdRoute
+  '/provider/jobs': typeof ProviderJobsRoute
   '/providers/$providerId': typeof ProvidersProviderIdRoute
+  '/admin/': typeof AdminIndexRoute
+  '/provider/': typeof ProviderIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/bookings': typeof BookingsRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup-customer': typeof AuthSignupCustomerRoute
   '/auth/signup-provider': typeof AuthSignupProviderRoute
   '/book/$categoryId': typeof BookCategoryIdRoute
+  '/provider/jobs': typeof ProviderJobsRoute
   '/providers/$providerId': typeof ProvidersProviderIdRoute
+  '/admin': typeof AdminIndexRoute
+  '/provider': typeof ProviderIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/bookings': typeof BookingsRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup-customer': typeof AuthSignupCustomerRoute
   '/auth/signup-provider': typeof AuthSignupProviderRoute
   '/book/$categoryId': typeof BookCategoryIdRoute
+  '/provider/jobs': typeof ProviderJobsRoute
   '/providers/$providerId': typeof ProvidersProviderIdRoute
+  '/admin/': typeof AdminIndexRoute
+  '/provider/': typeof ProviderIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/bookings'
     | '/auth/login'
     | '/auth/signup-customer'
     | '/auth/signup-provider'
     | '/book/$categoryId'
+    | '/provider/jobs'
     | '/providers/$providerId'
+    | '/admin/'
+    | '/provider/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/bookings'
     | '/auth/login'
     | '/auth/signup-customer'
     | '/auth/signup-provider'
     | '/book/$categoryId'
+    | '/provider/jobs'
     | '/providers/$providerId'
+    | '/admin'
+    | '/provider'
   id:
     | '__root__'
     | '/'
+    | '/bookings'
     | '/auth/login'
     | '/auth/signup-customer'
     | '/auth/signup-provider'
     | '/book/$categoryId'
+    | '/provider/jobs'
     | '/providers/$providerId'
+    | '/admin/'
+    | '/provider/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  BookingsRoute: typeof BookingsRoute
   AuthLoginRoute: typeof AuthLoginRoute
   AuthSignupCustomerRoute: typeof AuthSignupCustomerRoute
   AuthSignupProviderRoute: typeof AuthSignupProviderRoute
   BookCategoryIdRoute: typeof BookCategoryIdRoute
+  ProviderJobsRoute: typeof ProviderJobsRoute
   ProvidersProviderIdRoute: typeof ProvidersProviderIdRoute
+  AdminIndexRoute: typeof AdminIndexRoute
+  ProviderIndexRoute: typeof ProviderIndexRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/bookings': {
+      id: '/bookings'
+      path: '/bookings'
+      fullPath: '/bookings'
+      preLoaderRoute: typeof BookingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -117,11 +176,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/provider/': {
+      id: '/provider/'
+      path: '/provider'
+      fullPath: '/provider/'
+      preLoaderRoute: typeof ProviderIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/': {
+      id: '/admin/'
+      path: '/admin'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/providers/$providerId': {
       id: '/providers/$providerId'
       path: '/providers/$providerId'
       fullPath: '/providers/$providerId'
       preLoaderRoute: typeof ProvidersProviderIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/provider/jobs': {
+      id: '/provider/jobs'
+      path: '/provider/jobs'
+      fullPath: '/provider/jobs'
+      preLoaderRoute: typeof ProviderJobsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/book/$categoryId': {
@@ -157,11 +237,15 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  BookingsRoute: BookingsRoute,
   AuthLoginRoute: AuthLoginRoute,
   AuthSignupCustomerRoute: AuthSignupCustomerRoute,
   AuthSignupProviderRoute: AuthSignupProviderRoute,
   BookCategoryIdRoute: BookCategoryIdRoute,
+  ProviderJobsRoute: ProviderJobsRoute,
   ProvidersProviderIdRoute: ProvidersProviderIdRoute,
+  AdminIndexRoute: AdminIndexRoute,
+  ProviderIndexRoute: ProviderIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
