@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as BookingsRouteImport } from './routes/bookings'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ProviderIndexRouteImport } from './routes/provider.index'
 import { Route as ProvidersProviderIdRouteImport } from './routes/providers.$providerId'
 import { Route as BookCategoryIdRouteImport } from './routes/book.$categoryId'
 import { Route as AuthSignupProviderRouteImport } from './routes/auth.signup-provider'
@@ -25,6 +26,11 @@ const BookingsRoute = BookingsRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProviderIndexRoute = ProviderIndexRouteImport.update({
+  id: '/provider/',
+  path: '/provider/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProvidersProviderIdRoute = ProvidersProviderIdRouteImport.update({
@@ -61,6 +67,7 @@ export interface FileRoutesByFullPath {
   '/auth/signup-provider': typeof AuthSignupProviderRoute
   '/book/$categoryId': typeof BookCategoryIdRoute
   '/providers/$providerId': typeof ProvidersProviderIdRoute
+  '/provider/': typeof ProviderIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -70,6 +77,7 @@ export interface FileRoutesByTo {
   '/auth/signup-provider': typeof AuthSignupProviderRoute
   '/book/$categoryId': typeof BookCategoryIdRoute
   '/providers/$providerId': typeof ProvidersProviderIdRoute
+  '/provider': typeof ProviderIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -80,6 +88,7 @@ export interface FileRoutesById {
   '/auth/signup-provider': typeof AuthSignupProviderRoute
   '/book/$categoryId': typeof BookCategoryIdRoute
   '/providers/$providerId': typeof ProvidersProviderIdRoute
+  '/provider/': typeof ProviderIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -91,6 +100,7 @@ export interface FileRouteTypes {
     | '/auth/signup-provider'
     | '/book/$categoryId'
     | '/providers/$providerId'
+    | '/provider/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -100,6 +110,7 @@ export interface FileRouteTypes {
     | '/auth/signup-provider'
     | '/book/$categoryId'
     | '/providers/$providerId'
+    | '/provider'
   id:
     | '__root__'
     | '/'
@@ -109,6 +120,7 @@ export interface FileRouteTypes {
     | '/auth/signup-provider'
     | '/book/$categoryId'
     | '/providers/$providerId'
+    | '/provider/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -119,6 +131,7 @@ export interface RootRouteChildren {
   AuthSignupProviderRoute: typeof AuthSignupProviderRoute
   BookCategoryIdRoute: typeof BookCategoryIdRoute
   ProvidersProviderIdRoute: typeof ProvidersProviderIdRoute
+  ProviderIndexRoute: typeof ProviderIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -135,6 +148,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/provider/': {
+      id: '/provider/'
+      path: '/provider'
+      fullPath: '/provider/'
+      preLoaderRoute: typeof ProviderIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/providers/$providerId': {
@@ -183,6 +203,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthSignupProviderRoute: AuthSignupProviderRoute,
   BookCategoryIdRoute: BookCategoryIdRoute,
   ProvidersProviderIdRoute: ProvidersProviderIdRoute,
+  ProviderIndexRoute: ProviderIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
