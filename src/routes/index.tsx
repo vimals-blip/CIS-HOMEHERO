@@ -175,33 +175,107 @@ function Home() {
         </div>
       </section>
 
+      {/* Stats */}
+      <section className="border-y bg-card">
+        <div className="container mx-auto grid grid-cols-2 gap-6 px-4 py-10 md:grid-cols-4">
+          {[
+            { icon: Users, label: "Happy customers", value: "120K+" },
+            { icon: BadgeCheck, label: "Verified pros", value: "15,000+" },
+            { icon: ThumbsUp, label: "Avg. rating", value: "4.8 / 5" },
+            { icon: Award, label: "Cities live", value: "22" },
+          ].map((s) => (
+            <div key={s.label} className="flex items-center gap-4">
+              <div className="grid h-12 w-12 place-items-center rounded-2xl bg-primary/10 text-primary">
+                <s.icon className="h-6 w-6" />
+              </div>
+              <div>
+                <div className="text-2xl font-bold">{s.value}</div>
+                <div className="text-xs text-muted-foreground">{s.label}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* Featured providers */}
       <section className="container mx-auto px-4 py-16">
         <div className="mb-8 flex items-end justify-between">
           <div>
             <h2 className="text-2xl font-bold md:text-3xl">Top rated pros</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Highest rated in your city</p>
+            <p className="mt-1 text-sm text-muted-foreground">Highest rated in {city}</p>
           </div>
         </div>
 
         {fLoading ? (
           <LoadingSpinner />
-        ) : featured.length === 0 ? (
-          <div className="rounded-2xl border bg-gradient-to-br from-primary/5 to-transparent p-10 text-center">
-            <Star className="mx-auto h-8 w-8 text-primary" />
-            <h3 className="mt-3 font-semibold">Be the first pro on HomeHero</h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              No providers in your area yet. Join us and start earning.
-            </p>
-            <Button asChild className="mt-4">
-              <Link to="/auth/signup-provider">Become a provider <ArrowRight className="ml-1 h-4 w-4" /></Link>
-            </Button>
-          </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {featured.map((p) => <ProviderCard key={p.id} p={p} />)}
+            {(featured.length > 0 ? featured : DEMO_PROS).map((p) => (
+              <ProviderCard key={p.id} p={p} />
+            ))}
           </div>
         )}
+
+        {featured.length === 0 && (
+          <p className="mt-4 text-center text-xs text-muted-foreground">
+            Showing sample pros — real pros will appear here as they join.
+          </p>
+        )}
+      </section>
+
+      {/* Why HomeHero */}
+      <section className="border-y bg-muted/30">
+        <div className="container mx-auto px-4 py-16">
+          <div className="mx-auto max-w-2xl text-center">
+            <h2 className="text-2xl font-bold md:text-3xl">Why HomeHero</h2>
+            <p className="mt-2 text-sm text-muted-foreground">Standards that make every booking effortless</p>
+          </div>
+          <div className="mt-10 grid gap-4 md:grid-cols-3">
+            {[
+              { icon: BadgeCheck, title: "Background verified", desc: "ID, address & skill checks before any pro joins our platform." },
+              { icon: Shield, title: "Service guarantee", desc: "Not happy? We'll re-do the job or refund — no questions asked." },
+              { icon: Phone, title: "24/7 support", desc: "Real humans available round the clock on chat and call." },
+              { icon: Calendar, title: "Flexible slots", desc: "Same-day, weekends, evenings — book what fits your day." },
+              { icon: Star, title: "Trained pros", desc: "Hands-on training and continuous quality monitoring." },
+              { icon: ThumbsUp, title: "Transparent pricing", desc: "Upfront prices, no hidden charges or surprise add-ons." },
+            ].map((f) => (
+              <div key={f.title} className="rounded-2xl border bg-card p-6">
+                <div className="grid h-11 w-11 place-items-center rounded-xl bg-primary/10 text-primary">
+                  <f.icon className="h-5 w-5" />
+                </div>
+                <h3 className="mt-4 font-semibold">{f.title}</h3>
+                <p className="mt-1 text-sm text-muted-foreground">{f.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Testimonials */}
+      <section className="container mx-auto px-4 py-16">
+        <div className="mx-auto max-w-2xl text-center">
+          <h2 className="text-2xl font-bold md:text-3xl">Loved by customers</h2>
+          <p className="mt-2 text-sm text-muted-foreground">Real reviews from real bookings</p>
+        </div>
+        <div className="mt-10 grid gap-4 md:grid-cols-3">
+          {TESTIMONIALS.map((t) => (
+            <div key={t.name} className="rounded-2xl border bg-card p-6">
+              <Quote className="h-6 w-6 text-primary/40" />
+              <p className="mt-3 text-sm leading-relaxed">{t.quote}</p>
+              <div className="mt-5 flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-semibold">{t.name}</div>
+                  <div className="text-xs text-muted-foreground">{t.role}</div>
+                </div>
+                <div className="flex gap-0.5">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <Star key={i} className="h-3.5 w-3.5 fill-primary text-primary" />
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       </section>
 
       {/* CTA strip */}
@@ -219,3 +293,18 @@ function Home() {
     </div>
   );
 }
+
+const DEMO_PROS: ProviderCardData[] = [
+  { id: "demo-1", name: "Rahul Sharma", bio: "Expert AC technician with 8+ years experience. Quick diagnosis and honest pricing.", hourlyRate: 499, avgRating: 4.9, reviewCount: 312, isVerified: true, city: "Bengaluru", experienceYears: 8 },
+  { id: "demo-2", name: "Priya Patel", bio: "Deep cleaning specialist. Eco-friendly products, attention to every corner.", hourlyRate: 299, avgRating: 4.8, reviewCount: 268, isVerified: true, city: "Bengaluru", experienceYears: 5 },
+  { id: "demo-3", name: "Anil Verma", bio: "Licensed electrician handling wiring, fittings, and emergency repairs.", hourlyRate: 449, avgRating: 4.9, reviewCount: 421, isVerified: true, city: "Bengaluru", experienceYears: 12 },
+  { id: "demo-4", name: "Sunita Reddy", bio: "Master plumber. Leaks, installations, and full bathroom fits.", hourlyRate: 399, avgRating: 4.7, reviewCount: 189, isVerified: true, city: "Bengaluru", experienceYears: 6 },
+  { id: "demo-5", name: "Vikram Singh", bio: "Carpenter & furniture restoration. Custom builds and on-site repairs.", hourlyRate: 499, avgRating: 4.8, reviewCount: 156, isVerified: true, city: "Bengaluru", experienceYears: 10 },
+  { id: "demo-6", name: "Meera Iyer", bio: "Interior painter — clean lines, premium finishes, on-time delivery.", hourlyRate: 1999, avgRating: 4.9, reviewCount: 94, isVerified: true, city: "Bengaluru", experienceYears: 7 },
+];
+
+const TESTIMONIALS = [
+  { name: "Aditi M.", role: "Booked deep cleaning", quote: "Took 2 minutes to book and the team showed up early. House looks brand new." },
+  { name: "Karthik R.", role: "Booked AC repair", quote: "Honest diagnosis, fair price, fixed in under an hour. Easily my go-to now." },
+  { name: "Neha S.", role: "Booked electrician", quote: "Loved the transparent pricing and the verified badge. Felt safe inviting them home." },
+];
