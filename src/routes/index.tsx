@@ -2,7 +2,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
   Sparkles, Wrench, Zap, Hammer, PaintBucket, AirVent,
-  Search, Shield, Clock, Star, ArrowRight,
+  Search, Shield, Clock, Star, ArrowRight, BadgeCheck,
+  Users, ThumbsUp, Quote, Phone, Calendar, Award,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
