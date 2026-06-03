@@ -1,30 +1,32 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { useEffect } from "react";
-import { Calendar, MapPin, Clock, Inbox } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { Inbox, Star } from "lucide-react";
+import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { BookingCard } from "@/components/booking/BookingCard";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/bookings")({
   head: () => ({ meta: [{ title: "My Bookings — HomeHero" }] }),
   component: BookingsPage,
 });
 
-const statusColor: Record<string, string> = {
-  PENDING: "bg-amber-500/15 text-amber-700",
-  CONFIRMED: "bg-blue-500/15 text-blue-700",
-  IN_PROGRESS: "bg-purple-500/15 text-purple-700",
-  COMPLETED: "bg-emerald-500/15 text-emerald-700",
-  CANCELLED: "bg-red-500/15 text-red-700",
-};
-
 function BookingsPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const qc = useQueryClient();
+
+  const [reviewBookingId, setReviewBookingId] = useState<string | null>(null);
+  const [reviewProviderId, setReviewProviderId] = useState<string | null>(null);
+  const [rating, setRating] = useState(5);
+  const [comment, setComment] = useState("");
 
   useEffect(() => {
     if (!loading && !user) router.navigate({ to: "/auth/login" });
@@ -33,16 +35,43 @@ function BookingsPage() {
   const { data: bookings = [], isLoading } = useQuery({
     enabled: !!user,
     queryKey: ["my-bookings", user?.id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("bookings")
-        .select("id, status, scheduled_date, scheduled_time, address, total_amount, categories(name), providers(profiles(name))")
-        .eq("customer_id", user!.id)
-        .order("scheduled_date", { ascending: false });
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: () => apiFetch(`/bookings?customer_id=${user!.id}`),
   });
+
+  const cancelBooking = useMutation({
+    mutationFn: (id: string) =>
+      apiFetch(`/bookings/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'CANCELLED' }) }),
+    onSuccess: () => {
+      toast.success("Booking cancelled");
+      qc.invalidateQueries({ queryKey: ["my-bookings"] });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const submitReview = useMutation({
+    mutationFn: () =>
+      apiFetch('/reviews', {
+        method: 'POST',
+        body: JSON.stringify({ booking_id: reviewBookingId, provider_id: reviewProviderId, rating, comment }),
+      }),
+    onSuccess: () => {
+      toast.success("Review submitted!");
+      setReviewBookingId(null);
+      setReviewProviderId(null);
+      setRating(5);
+      setComment("");
+      qc.invalidateQueries({ queryKey: ["my-bookings"] });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const openReview = (bookingId: string) => {
+    const booking = (bookings as any[]).find((b) => b.id === bookingId);
+    if (booking) {
+      setReviewBookingId(bookingId);
+      setReviewProviderId(booking.provider_id);
+    }
+  };
 
   if (loading || isLoading) return <div className="container mx-auto px-4 py-16"><LoadingSpinner /></div>;
 
@@ -60,31 +89,52 @@ function BookingsPage() {
             action={<Button asChild><Link to="/">Browse services</Link></Button>}
           />
         ) : (
-          bookings.map((b: any) => (
-            <div key={b.id} className="rounded-2xl border bg-card p-5">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-semibold">{b.categories?.name ?? "Service"}</h3>
-                    <Badge className={statusColor[b.status] ?? ""} variant="secondary">{b.status}</Badge>
-                  </div>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    with {b.providers?.profiles?.name ?? "Provider"}
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-4 text-sm text-muted-foreground">
-                    <span className="inline-flex items-center gap-1.5"><Calendar className="h-4 w-4" />{b.scheduled_date}</span>
-                    <span className="inline-flex items-center gap-1.5"><Clock className="h-4 w-4" />{b.scheduled_time}</span>
-                    <span className="inline-flex items-center gap-1.5"><MapPin className="h-4 w-4" />{b.address}</span>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-lg font-bold">₹{Number(b.total_amount).toFixed(0)}</div>
-                </div>
-              </div>
-            </div>
+          (bookings as any[]).map((b) => (
+            <BookingCard
+              key={b.id}
+              booking={b}
+              onCancel={(id) => cancelBooking.mutate(id)}
+              onReview={openReview}
+              cancelling={cancelBooking.isPending}
+            />
           ))
         )}
       </div>
+
+      {/* Review dialog */}
+      <Dialog open={!!reviewBookingId} onOpenChange={(open) => !open && setReviewBookingId(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Leave a review</DialogTitle></DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div>
+              <Label>Rating</Label>
+              <div className="mt-2 flex gap-1">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button
+                    key={n}
+                    onClick={() => setRating(n)}
+                    className="transition-transform hover:scale-110"
+                  >
+                    <Star className={`h-7 w-7 ${n <= rating ? "fill-amber-400 text-amber-400" : "text-muted-foreground"}`} />
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <Label>Comment (optional)</Label>
+              <Textarea
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                placeholder="Share your experience…"
+                rows={3}
+              />
+            </div>
+            <Button className="w-full" disabled={submitReview.isPending} onClick={() => submitReview.mutate()}>
+              {submitReview.isPending ? "Submitting…" : "Submit review"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

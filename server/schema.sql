@@ -1,0 +1,167 @@
+CREATE TABLE IF NOT EXISTS users (
+  id VARCHAR(50) NOT NULL PRIMARY KEY,
+  email VARCHAR(255) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  is_verified TINYINT(1) NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS profiles (
+  id VARCHAR(50) NOT NULL PRIMARY KEY,
+  name VARCHAR(255),
+  city VARCHAR(255),
+  avatar_url TEXT,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS profile_contacts (
+  user_id VARCHAR(50) NOT NULL PRIMARY KEY,
+  phone VARCHAR(50),
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_profile_contacts_profile FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS categories (
+  id VARCHAR(50) NOT NULL PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  base_price DECIMAL(12,2) NOT NULL DEFAULT 0,
+  commission_pct DECIMAL(5,2) NOT NULL DEFAULT 0,
+  icon_name VARCHAR(255),
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS providers (
+  id VARCHAR(50) NOT NULL PRIMARY KEY,
+  avg_rating DECIMAL(3,2),
+  bio TEXT,
+  experience_years INT,
+  hourly_rate DECIMAL(12,2),
+  is_verified TINYINT(1) NOT NULL DEFAULT 0,
+  pin_codes JSON,
+  review_count INT NOT NULL DEFAULT 0,
+  status ENUM('ONLINE','OFFLINE','BUSY') NOT NULL DEFAULT 'OFFLINE',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_providers_profile FOREIGN KEY (id) REFERENCES profiles(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS provider_categories (
+  provider_id VARCHAR(50) NOT NULL,
+  category_id VARCHAR(50) NOT NULL,
+  custom_price DECIMAL(12,2),
+  PRIMARY KEY (provider_id, category_id),
+  CONSTRAINT fk_provider_categories_provider FOREIGN KEY (provider_id) REFERENCES providers(id) ON DELETE CASCADE,
+  CONSTRAINT fk_provider_categories_category FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS provider_documents (
+  id VARCHAR(50) NOT NULL PRIMARY KEY,
+  provider_id VARCHAR(50) NOT NULL,
+  file_url TEXT NOT NULL,
+  status ENUM('PENDING','APPROVED','REJECTED') NOT NULL DEFAULT 'PENDING',
+  type ENUM('AADHAAR','PAN','BANK') NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_provider_documents_provider FOREIGN KEY (provider_id) REFERENCES providers(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS provider_payouts (
+  provider_id VARCHAR(50) NOT NULL PRIMARY KEY,
+  bank_account_number VARCHAR(255),
+  bank_ifsc VARCHAR(255),
+  bank_name VARCHAR(255),
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_provider_payouts_provider FOREIGN KEY (provider_id) REFERENCES providers(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS provider_wallet (
+  provider_id VARCHAR(50) NOT NULL PRIMARY KEY,
+  available_balance DECIMAL(12,2) NOT NULL DEFAULT 0,
+  pending_balance DECIMAL(12,2) NOT NULL DEFAULT 0,
+  total_earned DECIMAL(12,2) NOT NULL DEFAULT 0,
+  CONSTRAINT fk_provider_wallet_provider FOREIGN KEY (provider_id) REFERENCES providers(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS coupons (
+  id VARCHAR(50) NOT NULL PRIMARY KEY,
+  code VARCHAR(255) NOT NULL UNIQUE,
+  type ENUM('FLAT','PERCENT') NOT NULL,
+  value DECIMAL(12,2) NOT NULL DEFAULT 0,
+  used_count INT NOT NULL DEFAULT 0,
+  max_uses INT,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  expires_at DATETIME,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS bookings (
+  id VARCHAR(50) NOT NULL PRIMARY KEY,
+  address TEXT NOT NULL,
+  category_id VARCHAR(50) NOT NULL,
+  coupon_code VARCHAR(255),
+  customer_id VARCHAR(50) NOT NULL,
+  provider_id VARCHAR(50) NOT NULL,
+  lat DECIMAL(10,7),
+  lng DECIMAL(10,7),
+  notes TEXT,
+  platform_fee DECIMAL(12,2) NOT NULL DEFAULT 0,
+  provider_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+  scheduled_date DATE NOT NULL,
+  scheduled_time VARCHAR(50) NOT NULL,
+  status ENUM('PENDING','CONFIRMED','IN_PROGRESS','COMPLETED','CANCELLED') NOT NULL DEFAULT 'PENDING',
+  total_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_bookings_category FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_bookings_customer FOREIGN KEY (customer_id) REFERENCES profiles(id) ON DELETE CASCADE,
+  CONSTRAINT fk_bookings_provider FOREIGN KEY (provider_id) REFERENCES providers(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS reviews (
+  id VARCHAR(50) NOT NULL PRIMARY KEY,
+  booking_id VARCHAR(50) NOT NULL,
+  provider_id VARCHAR(50) NOT NULL,
+  customer_id VARCHAR(50) NOT NULL,
+  rating INT NOT NULL,
+  comment TEXT,
+  provider_reply TEXT,
+  is_flagged TINYINT(1) NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_reviews_booking FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE,
+  CONSTRAINT fk_reviews_provider FOREIGN KEY (provider_id) REFERENCES providers(id) ON DELETE CASCADE,
+  CONSTRAINT fk_reviews_customer FOREIGN KEY (customer_id) REFERENCES profiles(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS payments (
+  id VARCHAR(50) NOT NULL PRIMARY KEY,
+  booking_id VARCHAR(50) NOT NULL,
+  amount DECIMAL(12,2) NOT NULL,
+  status ENUM('CREATED','PAID','REFUNDED') NOT NULL DEFAULT 'CREATED',
+  paid_at DATETIME,
+  razorpay_order_id VARCHAR(255),
+  razorpay_payment_id VARCHAR(255),
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_payments_booking FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS transactions (
+  id VARCHAR(50) NOT NULL PRIMARY KEY,
+  user_id VARCHAR(50) NOT NULL,
+  booking_id VARCHAR(50),
+  type ENUM('CREDIT','DEBIT') NOT NULL,
+  amount DECIMAL(12,2) NOT NULL,
+  description TEXT,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_transactions_user FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE,
+  CONSTRAINT fk_transactions_booking FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS user_roles (
+  id VARCHAR(50) NOT NULL PRIMARY KEY,
+  user_id VARCHAR(50) NOT NULL,
+  role ENUM('CUSTOMER','PROVIDER','ADMIN') NOT NULL DEFAULT 'CUSTOMER',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_user_roles_user FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE
+);

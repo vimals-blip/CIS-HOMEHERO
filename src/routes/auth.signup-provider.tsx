@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { supabase } from "@/integrations/supabase/client";
+import { apiFetch } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/auth/signup-provider")({
@@ -36,9 +36,7 @@ function SignupProvider() {
   const { data: categories = [] } = useQuery({
     queryKey: ["categories-active"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("categories").select("id, name").eq("is_active", true).order("name");
-      if (error) throw error;
-      return data;
+      return await apiFetch('/categories');
     },
   });
 
@@ -55,38 +53,29 @@ function SignupProvider() {
 
   const submit = async () => {
     setLoading(true);
-    const { data: signup, error } = await supabase.auth.signUp({
-      email: info.email,
-      password: info.password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/`,
-        data: { name: info.name, phone: info.phone, role: "PROVIDER" },
-      },
-    });
-    if (error || !signup.user) {
+    try {
+      await apiFetch('/auth/signup', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: info.name,
+          email: info.email,
+          phone: info.phone,
+          password: info.password,
+          city: info.city,
+          role: 'PROVIDER',
+          bio: info.bio,
+          experience_years: info.experience,
+          hourly_rate: info.hourlyRate,
+          category_ids: selectedCats,
+        }),
+      });
+      toast.success('Welcome! Your KYC will be reviewed shortly.');
+      navigate({ to: '/' });
+    } catch (error: any) {
+      toast.error(error.message ?? 'Signup failed');
+    } finally {
       setLoading(false);
-      toast.error(error?.message ?? "Signup failed");
-      return;
     }
-
-    const userId = signup.user.id;
-    // best-effort updates; RLS allows self insert/update
-    await supabase.from("profiles").upsert({ id: userId, name: info.name, city: info.city });
-    if (info.phone) {
-      await supabase.from("profile_contacts").upsert({ user_id: userId, phone: info.phone });
-    }
-    await supabase.from("providers").insert({
-      id: userId, bio: info.bio, experience_years: info.experience,
-      hourly_rate: info.hourlyRate, status: "OFFLINE",
-    });
-    if (selectedCats.length) {
-      await supabase.from("provider_categories").insert(
-        selectedCats.map((category_id) => ({ provider_id: userId, category_id }))
-      );
-    }
-    setLoading(false);
-    toast.success("Welcome! Your KYC will be reviewed shortly.");
-    navigate({ to: "/" });
   };
 
   const toggleCat = (id: string) => {

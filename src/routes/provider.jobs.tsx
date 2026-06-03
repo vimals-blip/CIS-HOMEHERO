@@ -2,7 +2,7 @@ import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { Calendar, MapPin, Clock, Briefcase } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -31,28 +31,16 @@ function JobsPage() {
     enabled: !!user,
     queryKey: ["provider-jobs", user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("bookings")
-        .select("id, status, scheduled_date, scheduled_time, address, total_amount, provider_amount, notes, categories(name), profiles!bookings_customer_id_fkey(name)")
-        .eq("provider_id", user!.id)
-        .order("scheduled_date", { ascending: true });
-      if (error) {
-        // fallback without explicit fkey hint
-        const { data: d2 } = await supabase
-          .from("bookings")
-          .select("id, status, scheduled_date, scheduled_time, address, total_amount, provider_amount, notes, categories(name)")
-          .eq("provider_id", user!.id)
-          .order("scheduled_date", { ascending: true });
-        return d2 ?? [];
-      }
-      return data ?? [];
+      return await apiFetch(`/bookings?provider_id=${user!.id}`);
     },
   });
 
   const updateStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const { error } = await supabase.from("bookings").update({ status: status as any }).eq("id", id);
-      if (error) throw error;
+      await apiFetch(`/bookings/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+      });
     },
     onSuccess: () => {
       toast.success("Job updated");
@@ -82,12 +70,12 @@ function JobsPage() {
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <h3 className="font-semibold">{j.categories?.name ?? "Service"}</h3>
+                      <h3 className="font-semibold">{j.category_name ?? "Service"}</h3>
                       <Badge variant="secondary">{j.status}</Badge>
                     </div>
                     <div className="mt-2 flex flex-wrap gap-4 text-sm text-muted-foreground">
-                      <span className="inline-flex items-center gap-1.5"><Calendar className="h-4 w-4" />{j.scheduled_date}</span>
-                      <span className="inline-flex items-center gap-1.5"><Clock className="h-4 w-4" />{j.scheduled_time}</span>
+                      <span className="inline-flex items-center gap-1.5"><Calendar className="h-4 w-4" />{String(j.scheduled_date).slice(0, 10)}</span>
+                      <span className="inline-flex items-center gap-1.5"><Clock className="h-4 w-4" />{String(j.scheduled_time).slice(0, 5)}</span>
                       <span className="inline-flex items-center gap-1.5"><MapPin className="h-4 w-4" />{j.address}</span>
                     </div>
                     {j.notes && <p className="mt-2 text-sm">{j.notes}</p>}

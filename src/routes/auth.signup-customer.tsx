@@ -6,7 +6,7 @@ import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { supabase } from "@/integrations/supabase/client";
+import { apiFetch } from "@/lib/api";
 
 export const Route = createFileRoute("/auth/signup-customer")({
   head: () => ({ meta: [{ title: "Sign up — HomeHero" }] }),
@@ -36,18 +36,25 @@ function SignupCustomer() {
     if (!parsed.success) { setErr(parsed.error.issues[0].message); return; }
 
     setLoading(true);
-    const { error } = await supabase.auth.signUp({
-      email: form.email,
-      password: form.password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/`,
-        data: { name: form.name, phone: form.phone, role: "CUSTOMER" },
-      },
-    });
-    setLoading(false);
-    if (error) { setErr(error.message); toast.error(error.message); return; }
-    toast.success("Account created! Check your email to verify.");
-    navigate({ to: "/" });
+    try {
+      await apiFetch('/auth/signup', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: form.name,
+          email: form.email,
+          phone: form.phone,
+          password: form.password,
+          role: 'CUSTOMER',
+        }),
+      });
+      toast.success('Account created! You can now log in.');
+      navigate({ to: '/auth/login' });
+    } catch (error: any) {
+      setErr(error.message ?? 'Signup failed');
+      toast.error(error.message ?? 'Signup failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

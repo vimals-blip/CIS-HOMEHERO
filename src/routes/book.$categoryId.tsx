@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { z } from "zod";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { Calendar as CalendarIcon, Check, MapPin, Tag } from "lucide-react";
@@ -14,17 +15,25 @@ import { ProviderCard, type ProviderCardData } from "@/components/provider/Provi
 import { TimeSlotGrid } from "@/components/booking/TimeSlotGrid";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { supabase } from "@/integrations/supabase/client";
+import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 
+// Task 4 — optional providerId search param passed from provider profile "Book Now"
+const searchSchema = z.object({
+  providerId: z.string().optional(),
+});
+
 export const Route = createFileRoute("/book/$categoryId")({
   head: () => ({ meta: [{ title: "Book a service — HomeHero" }] }),
+  validateSearch: searchSchema,
   component: BookService,
 });
 
 function BookService() {
   const { categoryId } = Route.useParams();
+  // Task 4 — read optional providerId from search params (passed from provider profile)
+  const { providerId: preselectedProviderId } = Route.useSearch();
   const navigate = useNavigate();
   const { user } = useAuth();
   const [step, setStep] = useState(1);
@@ -39,34 +48,39 @@ function BookService() {
   const { data: category } = useQuery({
     queryKey: ["category", categoryId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("categories").select("*").eq("id", categoryId).single();
-      if (error) throw error;
-      return data;
+      return await apiFetch(`/categories/${categoryId}`);
     },
   });
 
   const { data: providers = [], isLoading } = useQuery({
     queryKey: ["providers-by-category", categoryId],
     queryFn: async (): Promise<ProviderCardData[]> => {
-      const { data, error } = await supabase
-        .from("provider_categories")
-        .select("custom_price, providers!inner(id, bio, experience_years, hourly_rate, is_verified, avg_rating, review_count, profiles!inner(name, avatar_url, city))")
-        .eq("category_id", categoryId);
-      if (error) throw error;
+      const data = await apiFetch(`/providers?category_id=${categoryId}`);
       return (data ?? []).map((row: any) => ({
-        id: row.providers.id,
-        name: row.providers.profiles?.name ?? "Provider",
-        avatarUrl: row.providers.profiles?.avatar_url,
-        bio: row.providers.bio,
-        hourlyRate: Number(row.custom_price ?? row.providers.hourly_rate),
-        avgRating: Number(row.providers.avg_rating) || 0,
-        reviewCount: row.providers.review_count,
-        isVerified: row.providers.is_verified,
-        city: row.providers.profiles?.city,
-        experienceYears: row.providers.experience_years,
+        id: row.id,
+        name: row.name ?? "Provider",
+        avatarUrl: row.avatar_url,
+        bio: row.bio,
+        hourlyRate: Number(row.hourly_rate),
+        avgRating: Number(row.avg_rating) || 0,
+        reviewCount: row.review_count,
+        isVerified: row.is_verified,
+        city: row.city,
+        experienceYears: row.experience_years,
       }));
     },
   });
+
+  // Task 4 — auto-select provider when preselectedProviderId is set
+  useEffect(() => {
+    if (preselectedProviderId && providers.length > 0 && !selectedProvider) {
+      const match = providers.find((p) => p.id === preselectedProviderId);
+      if (match) {
+        setSelectedProvider(match);
+        setStep(2);
+      }
+    }
+  }, [preselectedProviderId, providers, selectedProvider]);
 
   const basePrice = Number(category?.base_price ?? 0);
   const commission = Number(category?.commission_pct ?? 15);
@@ -81,28 +95,36 @@ function BookService() {
     if (!user) { toast.error("Please log in to book"); navigate({ to: "/auth/login" }); return; }
     if (!selectedProvider || !date || !slot || !address.trim()) { toast.error("Missing booking details"); return; }
     setSubmitting(true);
-    const { data, error } = await supabase.from("bookings").insert({
-      customer_id: user.id,
-      provider_id: selectedProvider.id,
-      category_id: categoryId,
-      scheduled_date: format(date, "yyyy-MM-dd"),
-      scheduled_time: slot + ":00",
-      status: "PENDING",
-      address: address.trim(),
-      total_amount: total,
-      platform_fee: platformFee,
-      provider_amount: providerAmount,
-      notes: notes.trim() || null,
-      coupon_code: coupon.trim() || null,
-    }).select().single();
-    setSubmitting(false);
-    if (error) { toast.error(error.message); return; }
-    // Stub payment record
-    await supabase.from("payments").insert({
-      booking_id: data!.id, amount: total, status: "CREATED",
-    });
-    toast.success("Booking confirmed! Provider will be notified.");
-    navigate({ to: "/" });
+    try {
+      const booking = await apiFetch('/bookings', {
+        method: 'POST',
+        body: JSON.stringify({
+          address: address.trim(),
+          category_id: categoryId,
+          customer_id: user.id,
+          provider_id: selectedProvider.id,
+          scheduled_date: format(date, "yyyy-MM-dd"),
+          scheduled_time: slot + ":00",
+          total_amount: total,
+          platform_fee: platformFee,
+          provider_amount: providerAmount,
+          notes: notes.trim() || null,
+          coupon_code: coupon.trim() || null,
+        }),
+      });
+
+      await apiFetch('/payments', {
+        method: 'POST',
+        body: JSON.stringify({ booking_id: booking.id, amount: total, status: 'CREATED' }),
+      });
+
+      toast.success("Booking confirmed! Provider will be notified.");
+      navigate({ to: "/" });
+    } catch (error: any) {
+      toast.error(error.message ?? 'Booking failed');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (

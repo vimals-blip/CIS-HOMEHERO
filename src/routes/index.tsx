@@ -8,7 +8,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { supabase } from "@/integrations/supabase/client";
+import { apiFetch } from "@/lib/api";
 import { ProviderCard, type ProviderCardData } from "@/components/provider/ProviderCard";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { useState } from "react";
@@ -36,36 +36,24 @@ function Home() {
   const { data: categories = [], isLoading: catLoading } = useQuery({
     queryKey: ["categories"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("categories")
-        .select("*")
-        .eq("is_active", true)
-        .order("name");
-      if (error) throw error;
-      return data;
+      return await apiFetch('/categories');
     },
   });
 
   const { data: featured = [], isLoading: fLoading } = useQuery({
     queryKey: ["featured-providers"],
     queryFn: async (): Promise<ProviderCardData[]> => {
-      const { data, error } = await supabase
-        .from("providers")
-        .select("id, bio, experience_years, hourly_rate, is_verified, avg_rating, review_count, profiles!inner(name, avatar_url, city)")
-        .eq("is_verified", true)
-        .order("avg_rating", { ascending: false })
-        .limit(6);
-      if (error) throw error;
+      const data = await apiFetch('/providers?verified=true&limit=6');
       return (data ?? []).map((row: any) => ({
         id: row.id,
-        name: row.profiles?.name ?? "Provider",
-        avatarUrl: row.profiles?.avatar_url,
+        name: row.name ?? "Provider",
+        avatarUrl: row.avatar_url,
         bio: row.bio,
         hourlyRate: Number(row.hourly_rate),
         avgRating: Number(row.avg_rating) || 0,
         reviewCount: row.review_count,
         isVerified: row.is_verified,
-        city: row.profiles?.city,
+        city: row.city,
         experienceYears: row.experience_years,
       }));
     },

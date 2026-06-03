@@ -6,7 +6,7 @@ import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { supabase } from "@/integrations/supabase/client";
+import { apiFetch } from "@/lib/api";
 
 export const Route = createFileRoute("/auth/login")({
   head: () => ({ meta: [{ title: "Log in — HomeHero" }] }),
@@ -34,15 +34,26 @@ function Login() {
       return;
     }
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
-    if (error) {
-      setErr(error.message);
-      toast.error(error.message);
-      return;
+    try {
+      const result = await apiFetch('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      });
+      if (!result?.token) {
+        throw new Error('Login failed: invalid server response.');
+      }
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('homehero_token', result.token);
+        window.dispatchEvent(new Event('homehero-auth-changed'));
+      }
+      toast.success("Welcome back!");
+      navigate({ to: "/" });
+    } catch (error: any) {
+      setErr(error.message ?? 'Login failed');
+      toast.error(error.message ?? 'Login failed');
+    } finally {
+      setLoading(false);
     }
-    toast.success("Welcome back!");
-    navigate({ to: "/" });
   };
 
   return (

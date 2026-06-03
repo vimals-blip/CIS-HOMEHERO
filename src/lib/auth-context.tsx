@@ -1,12 +1,11 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import type { Session, User } from "@supabase/supabase-js";
-import { supabase } from "@/integrations/supabase/client";
+import { decodeJwtPayload } from "@/lib/token";
 
 export type AppRole = "CUSTOMER" | "PROVIDER" | "ADMIN";
 
 interface AuthContextValue {
-  user: User | null;
-  session: Session | null;
+  user: { id: string; email: string; role: AppRole } | null;
+  token: string | null;
   role: AppRole | null;
   loading: boolean;
   signOut: () => Promise<void>;
@@ -14,58 +13,63 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+function getStoredToken() {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem("homehero_token");
+}
+
+function parseToken(token: string | null) {
+  if (!token) return null;
+  const payload = decodeJwtPayload<Record<string, unknown>>(token);
+  if (!payload || typeof payload.user_id !== "string" || typeof payload.role !== "string") return null;
+  return {
+    id: payload.user_id,
+    email: typeof payload.email === "string" ? payload.email : "unknown@example.com",
+    role: payload.role as AppRole,
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<{ id: string; email: string; role: AppRole } | null>(null);
+  const [token, setToken] = useState<string | null>(null);
   const [role, setRole] = useState<AppRole | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession);
-      setUser(newSession?.user ?? null);
-      if (newSession?.user) {
-        // defer to avoid deadlock
-        setTimeout(() => {
-          supabase
-            .from("user_roles")
-            .select("role")
-            .eq("user_id", newSession.user.id)
-            .maybeSingle()
-            .then(({ data }) => setRole((data?.role as AppRole) ?? "CUSTOMER"));
-        }, 0);
-      } else {
-        setRole(null);
-      }
-    });
+    const updateAuth = () => {
+      const storedToken = getStoredToken();
+      const parsed = parseToken(storedToken);
+      setToken(storedToken);
+      setUser(parsed);
+      setRole(parsed?.role ?? null);
+      setLoading(false);
+    };
 
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
-      setSession(s);
-      setUser(s?.user ?? null);
-      if (s?.user) {
-        supabase
-          .from("user_roles")
-          .select("role")
-          .eq("user_id", s.user.id)
-          .maybeSingle()
-          .then(({ data }) => {
-            setRole((data?.role as AppRole) ?? "CUSTOMER");
-            setLoading(false);
-          });
-      } else {
-        setLoading(false);
-      }
-    });
+    updateAuth();
 
-    return () => subscription.unsubscribe();
+    if (typeof window !== "undefined") {
+      window.addEventListener("homehero-auth-changed", updateAuth);
+    }
+
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("homehero-auth-changed", updateAuth);
+      }
+    };
   }, []);
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem("homehero_token");
+      window.dispatchEvent(new Event("homehero-auth-changed"));
+    }
+    setToken(null);
+    setUser(null);
+    setRole(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, role, loading, signOut }}>
+    <AuthContext.Provider value={{ user, token, role, loading, signOut }}>
       {children}
     </AuthContext.Provider>
   );
