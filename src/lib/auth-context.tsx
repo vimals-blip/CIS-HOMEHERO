@@ -1,7 +1,8 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { decodeJwtPayload } from "@/lib/token";
+import { apiFetch, getRefreshToken, clearTokens } from "@/lib/api";
 
-export type AppRole = "CUSTOMER" | "PROVIDER" | "ADMIN";
+export type AppRole = "CUSTOMER" | "EXPERT" | "ADMIN" | "SUPER_ADMIN";
 
 interface AuthContextValue {
   user: { id: string; email: string; role: AppRole } | null;
@@ -59,10 +60,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = async () => {
-    if (typeof window !== "undefined") {
-      window.localStorage.removeItem("homehero_token");
-      window.dispatchEvent(new Event("homehero-auth-changed"));
+    // Best-effort server-side revocation of the refresh token.
+    const refreshToken = getRefreshToken();
+    if (refreshToken) {
+      try {
+        await apiFetch("/auth/logout", { method: "POST", body: JSON.stringify({ refresh_token: refreshToken }) });
+      } catch { /* ignore — clear locally regardless */ }
     }
+    clearTokens();
     setToken(null);
     setUser(null);
     setRole(null);

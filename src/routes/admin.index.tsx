@@ -3,9 +3,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import {
   LayoutDashboard, ShieldCheck, Users, Briefcase, Tag, Ticket,
-  CheckCircle2, XCircle, Plus, RefreshCw, Search, TrendingUp,
-  IndianRupee, Star, Wifi, WifiOff, ArrowUpRight, MoreHorizontal,
-  BookOpen, Filter, Download, AlertCircle, Circle,
+  CheckCircle2, XCircle, Plus, RefreshCw, Search, IndianRupee,
+  Star, BookOpen, Circle, AlertCircle, Wallet, LifeBuoy, Settings as SettingsIcon, Send, ArrowLeft,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -14,10 +13,12 @@ import {
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { Avatar } from "@/components/shared/Avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
@@ -28,114 +29,80 @@ export const Route = createFileRoute("/admin/")({
   component: AdminDashboard,
 });
 
-type Section = "overview" | "kyc" | "providers" | "bookings" | "users" | "categories" | "coupons";
+type Section = "overview" | "kyc" | "experts" | "bookings" | "users" | "services" | "coupons" | "settlements" | "support" | "settings" | "admins";
 
 const STATUS_PILL: Record<string, string> = {
-  PENDING:     "bg-amber-50 text-amber-700 ring-1 ring-amber-200",
-  CONFIRMED:   "bg-blue-50 text-blue-700 ring-1 ring-blue-200",
+  SEARCHING:   "bg-amber-50 text-amber-700 ring-1 ring-amber-200",
+  ASSIGNED:    "bg-blue-50 text-blue-700 ring-1 ring-blue-200",
+  ON_THE_WAY:  "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200",
+  ARRIVED:     "bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200",
   IN_PROGRESS: "bg-violet-50 text-violet-700 ring-1 ring-violet-200",
   COMPLETED:   "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
   CANCELLED:   "bg-red-50 text-red-700 ring-1 ring-red-200",
 };
-
 const ROLE_PILL: Record<string, string> = {
-  ADMIN:    "bg-violet-100 text-violet-700",
-  PROVIDER: "bg-blue-100 text-blue-700",
-  CUSTOMER: "bg-slate-100 text-slate-600",
+  ADMIN: "bg-violet-100 text-violet-700", EXPERT: "bg-blue-100 text-blue-700", CUSTOMER: "bg-slate-100 text-slate-600",
 };
-
-const AVATAR_BG = [
-  "bg-violet-500","bg-blue-500","bg-emerald-500",
-  "bg-orange-500","bg-pink-500","bg-teal-500","bg-indigo-500",
-];
-function avatarBg(str: string) { return AVATAR_BG[(str?.charCodeAt(0) ?? 0) % AVATAR_BG.length]; }
-function initials(name: string) { return (name ?? "?").slice(0, 2).toUpperCase(); }
-
 function StatusDot({ status }: { status: string }) {
   const cls = status === "ONLINE" ? "bg-emerald-500" : status === "BUSY" ? "bg-amber-500" : "bg-slate-300";
   return <span className={`inline-block h-2 w-2 rounded-full ${cls}`} />;
 }
 
-// ── Sidebar ──────────────────────────────────────────────────────────────────
-const NAV: { id: Section; label: string; icon: any; badge?: (d: any) => number }[] = [
-  { id: "overview",    label: "Overview",    icon: LayoutDashboard },
-  { id: "kyc",         label: "KYC Queue",   icon: ShieldCheck, badge: (d) => d?.pending?.length ?? 0 },
-  { id: "providers",   label: "Providers",   icon: Users },
-  { id: "bookings",    label: "Bookings",    icon: Briefcase },
-  { id: "users",       label: "Users",       icon: BookOpen },
-  { id: "categories",  label: "Categories",  icon: Tag },
-  { id: "coupons",     label: "Coupons",     icon: Ticket },
+const NAV: { id: Section; label: string; icon: any; badge?: (d: any) => number; superOnly?: boolean }[] = [
+  { id: "overview", label: "Overview", icon: LayoutDashboard },
+  { id: "kyc",      label: "KYC Queue", icon: ShieldCheck, badge: (d) => d?.pending?.length ?? 0 },
+  { id: "experts",  label: "Experts", icon: Users },
+  { id: "bookings", label: "Bookings", icon: Briefcase },
+  { id: "users",    label: "Users", icon: BookOpen },
+  { id: "services", label: "Services", icon: Tag },
+  { id: "coupons",  label: "Coupons", icon: Ticket },
+  { id: "settlements", label: "Settlements", icon: Wallet },
+  { id: "support", label: "Support", icon: LifeBuoy },
+  { id: "settings", label: "Settings", icon: SettingsIcon, superOnly: true },
+  { id: "admins", label: "Admins", icon: ShieldCheck, superOnly: true },
 ];
 
-function Sidebar({ active, onChange, overviewData }: { active: Section; onChange: (s: Section) => void; overviewData: any }) {
+function Sidebar({ active, onChange, data, isSuperAdmin }: { active: Section; onChange: (s: Section) => void; data: any; isSuperAdmin: boolean }) {
   return (
-    <aside className="hidden lg:flex flex-col w-56 shrink-0 border-r bg-[#0f1117] text-white min-h-screen sticky top-16">
-      <div className="px-4 py-5 border-b border-white/10">
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-white/40">Admin Console</p>
+    <aside className="sticky top-16 hidden min-h-screen w-56 shrink-0 flex-col border-r bg-[#0f1117] text-white lg:flex">
+      <div className="border-b border-white/10 px-4 py-5">
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-white/40">{isSuperAdmin ? "Super Admin" : "Admin Console"}</p>
       </div>
-      <nav className="flex-1 py-3 space-y-0.5 px-2">
-        {NAV.map(({ id, label, icon: Icon, badge }) => {
-          const count = badge?.(overviewData) ?? 0;
-          const isActive = active === id;
+      <nav className="flex-1 space-y-0.5 px-2 py-3">
+        {NAV.filter((n) => !(n as any).superOnly || isSuperAdmin).map(({ id, label, icon: Icon, badge }) => {
+          const count = badge?.(data) ?? 0;
           return (
-            <button
-              key={id}
-              onClick={() => onChange(id)}
-              className={cn(
-                "w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
-                isActive
-                  ? "bg-white/10 text-white"
-                  : "text-white/50 hover:bg-white/5 hover:text-white/80",
-              )}
-            >
+            <button key={id} onClick={() => onChange(id)} className={cn(
+              "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
+              active === id ? "bg-white/10 text-white" : "text-white/50 hover:bg-white/5 hover:text-white/80",
+            )}>
               <Icon className="h-4 w-4 shrink-0" />
               <span className="flex-1 text-left">{label}</span>
-              {count > 0 && (
-                <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-amber-500 px-1.5 text-[10px] font-bold text-white">
-                  {count}
-                </span>
-              )}
+              {count > 0 && <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-amber-500 px-1.5 text-[10px] font-bold text-white">{count}</span>}
             </button>
           );
         })}
       </nav>
-      <div className="px-4 py-4 border-t border-white/10">
-        <div className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="text-[11px] text-white/40">All systems operational</span>
-        </div>
-      </div>
     </aside>
   );
 }
 
-// ── Stat card ─────────────────────────────────────────────────────────────────
-function StatCard({ icon: Icon, label, value, sub, color, trend }: any) {
+function StatCard({ icon: Icon, label, value, sub, color }: any) {
   return (
-    <div className="rounded-2xl border bg-card p-5 flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <div className={cn("grid h-10 w-10 place-items-center rounded-xl", color)}>
-          <Icon className="h-5 w-5" />
-        </div>
-        {trend != null && (
-          <span className="flex items-center gap-0.5 text-xs font-medium text-emerald-600">
-            <ArrowUpRight className="h-3 w-3" />{trend}
-          </span>
-        )}
-      </div>
+    <div className="flex flex-col gap-3 rounded-2xl border bg-card p-5">
+      <div className={cn("grid h-10 w-10 place-items-center rounded-xl", color)}><Icon className="h-5 w-5" /></div>
       <div>
         <div className="text-2xl font-bold tracking-tight">{value}</div>
         <div className="text-xs text-muted-foreground">{label}</div>
       </div>
-      {sub && <div className="text-[11px] text-muted-foreground border-t pt-2">{sub}</div>}
+      {sub && <div className="border-t pt-2 text-[11px] text-muted-foreground">{sub}</div>}
     </div>
   );
 }
 
-// ── Section header ─────────────────────────────────────────────────────────────
 function SectionHead({ title, desc, action }: { title: string; desc?: string; action?: React.ReactNode }) {
   return (
-    <div className="flex items-start justify-between gap-4 mb-5">
+    <div className="mb-5 flex items-start justify-between gap-4">
       <div>
         <h2 className="text-xl font-semibold">{title}</h2>
         {desc && <p className="mt-0.5 text-sm text-muted-foreground">{desc}</p>}
@@ -145,86 +112,212 @@ function SectionHead({ title, desc, action }: { title: string; desc?: string; ac
   );
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────────
 function AdminDashboard() {
   const { user, role, loading } = useAuth();
+  const isAdmin = role === "ADMIN" || role === "SUPER_ADMIN";
+  const isSuperAdmin = role === "SUPER_ADMIN";
   const router = useRouter();
   const qc = useQueryClient();
   const [section, setSection] = useState<Section>("overview");
-
-  // Filter states
   const [kycQ, setKycQ] = useState("");
-  const [provQ, setProvQ] = useState(""); const [provCity, setProvCity] = useState(""); const [provStatus, setProvStatus] = useState("all"); const [provVerified, setProvVerified] = useState("all");
+  const [expQ, setExpQ] = useState(""); const [expStatus, setExpStatus] = useState("all"); const [expVerified, setExpVerified] = useState("all");
   const [couponOpen, setCouponOpen] = useState(false);
   const [couponForm, setCouponForm] = useState({ code: "", type: "FLAT", value: "", max_uses: "" });
-  const [catOpen, setCatOpen] = useState(false);
-  const [catForm, setCatForm] = useState({ name: "", base_price: "", commission_pct: "15", icon_name: "Sparkles" });
+  const [svcOpen, setSvcOpen] = useState(false);
+  const [svcForm, setSvcForm] = useState({ name: "", slug: "", tagline: "", rate_per_hour: "", icon_name: "Sparkles" });
 
   useEffect(() => {
     if (!loading) {
       if (!user) router.navigate({ to: "/auth/login" });
-      else if (role && role !== "ADMIN") router.navigate({ to: "/" });
+      else if (role && role !== "ADMIN" && role !== "SUPER_ADMIN") router.navigate({ to: "/" });
     }
   }, [user, role, loading, router]);
 
-  const { data, isLoading } = useQuery({
-    enabled: role === "ADMIN",
-    queryKey: ["admin-overview"],
-    queryFn: () => apiFetch('/admin/overview'),
-  });
+  const { data, isLoading } = useQuery({ enabled: isAdmin, queryKey: ["admin-overview"], queryFn: () => apiFetch("/admin/overview") });
 
-  const { data: allProviders = [], isLoading: provsLoading } = useQuery({
-    enabled: role === "ADMIN" && section === "providers",
-    queryKey: ["admin-providers", provQ, provCity, provStatus, provVerified],
+  const { data: experts = [], isLoading: expLoading } = useQuery({
+    enabled: isAdmin && section === "experts",
+    queryKey: ["admin-experts", expQ, expStatus, expVerified],
     queryFn: () => {
       const p = new URLSearchParams({ limit: "50" });
-      if (provQ) p.set("q", provQ);
-      if (provCity) p.set("city", provCity);
-      if (provStatus !== "all") p.set("status", provStatus);
-      if (provVerified !== "all") p.set("is_verified", provVerified);
-      return apiFetch(`/admin/providers?${p}`);
+      if (expQ) p.set("q", expQ);
+      if (expStatus !== "all") p.set("status", expStatus);
+      if (expVerified !== "all") p.set("is_verified", expVerified);
+      return apiFetch(`/admin/experts?${p}`);
     },
   });
 
-  const { data: allUsers = [], isLoading: usersLoading } = useQuery({
-    enabled: role === "ADMIN" && section === "users",
-    queryKey: ["admin-users"],
-    queryFn: () => apiFetch('/admin/users?limit=100'),
+  const [userQ, setUserQ] = useState("");
+  const { data: users = [], isLoading: usersLoading } = useQuery({
+    enabled: isAdmin && section === "users", queryKey: ["admin-users", userQ],
+    queryFn: () => apiFetch(`/admin/users?limit=100${userQ ? `&q=${encodeURIComponent(userQ)}` : ""}`),
+  });
+  const { data: allBookings = [], isLoading: bookingsLoading } = useQuery({
+    enabled: isAdmin && section === "bookings", queryKey: ["admin-bookings"], queryFn: () => apiFetch("/admin/bookings?limit=50"),
+  });
+  const { data: withdrawals = [], isLoading: wdLoading } = useQuery({
+    enabled: isAdmin && section === "settlements", queryKey: ["admin-withdrawals"], queryFn: () => apiFetch("/admin/withdrawals"),
   });
 
-  const { data: allBookings = [], isLoading: bookingsLoading } = useQuery({
-    enabled: role === "ADMIN" && section === "bookings",
-    queryKey: ["admin-bookings"],
-    queryFn: () => apiFetch('/admin/bookings?limit=50'),
+  const actWithdrawal = useMutation({
+    mutationFn: ({ id, action }: { id: string; action: string }) =>
+      apiFetch(`/admin/withdrawals/${id}`, { method: "PATCH", body: JSON.stringify({ action }) }),
+    onSuccess: (_d, v) => { toast.success(`Withdrawal ${v.action}d`); qc.invalidateQueries({ queryKey: ["admin-withdrawals"] }); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  // KYC document review
+  const [docsExpert, setDocsExpert] = useState<{ id: string; name: string } | null>(null);
+  const { data: expertDocs = [], isLoading: docsLoading } = useQuery({
+    enabled: !!docsExpert, queryKey: ["admin-expert-docs", docsExpert?.id], queryFn: () => apiFetch(`/experts/${docsExpert!.id}/documents`),
+  });
+  const reviewDoc = useMutation({
+    mutationFn: ({ docId, status }: { docId: string; status: string }) =>
+      apiFetch(`/admin/experts/${docsExpert!.id}/documents/${docId}`, { method: "PATCH", body: JSON.stringify({ status }) }),
+    onSuccess: (_d, v) => { toast.success(`Document ${v.status.toLowerCase()}`); qc.invalidateQueries({ queryKey: ["admin-expert-docs", docsExpert?.id] }); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  // Support
+  const [openTicket, setOpenTicket] = useState<string | null>(null);
+  const [reply, setReply] = useState("");
+  const { data: tickets = [], isLoading: ticketsLoading } = useQuery({
+    enabled: isAdmin && section === "support", queryKey: ["admin-tickets"], queryFn: () => apiFetch("/support/tickets"),
+  });
+  const { data: ticketThread } = useQuery({
+    enabled: !!openTicket, queryKey: ["admin-ticket", openTicket], queryFn: () => apiFetch(`/support/tickets/${openTicket}`),
+  });
+  const ticketReply = useMutation({
+    mutationFn: () => apiFetch(`/support/tickets/${openTicket}/messages`, { method: "POST", body: JSON.stringify({ body: reply }) }),
+    onSuccess: () => { setReply(""); qc.invalidateQueries({ queryKey: ["admin-ticket", openTicket] }); qc.invalidateQueries({ queryKey: ["admin-tickets"] }); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const ticketStatus = useMutation({
+    mutationFn: (status: string) => apiFetch(`/support/tickets/${openTicket}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
+    onSuccess: () => { toast.success("Ticket updated"); qc.invalidateQueries({ queryKey: ["admin-ticket", openTicket] }); qc.invalidateQueries({ queryKey: ["admin-tickets"] }); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  // Settings / CMS
+  const [settingEdits, setSettingEdits] = useState<Record<string, string>>({});
+  const [newCity, setNewCity] = useState("");
+  const { data: settings = [], isLoading: settingsLoading } = useQuery({
+    enabled: isAdmin && section === "settings", queryKey: ["admin-settings"], queryFn: () => apiFetch("/admin/settings"),
+  });
+  const { data: cities = [] } = useQuery({
+    enabled: isAdmin && section === "settings", queryKey: ["admin-cities"], queryFn: () => apiFetch("/admin/cities"),
+  });
+  const saveSetting = useMutation({
+    mutationFn: (s: { key: string; value: string; is_public: boolean }) => apiFetch("/admin/settings", { method: "POST", body: JSON.stringify(s) }),
+    onSuccess: () => { toast.success("Setting saved"); qc.invalidateQueries({ queryKey: ["admin-settings"] }); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const addCity = useMutation({
+    mutationFn: (name: string) => apiFetch("/admin/cities", { method: "POST", body: JSON.stringify({ name }) }),
+    onSuccess: () => { toast.success("City added"); setNewCity(""); qc.invalidateQueries({ queryKey: ["admin-cities"] }); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const toggleCity = useMutation({
+    mutationFn: ({ id, is_active }: { id: string; is_active: boolean }) => apiFetch(`/admin/cities/${id}`, { method: "PATCH", body: JSON.stringify({ is_active }) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-cities"] }),
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  // Banners + CMS pages
+  const [banner, setBanner] = useState({ title: "", image_url: "" });
+  const [pageSlug, setPageSlug] = useState("terms");
+  const [pageForm, setPageForm] = useState({ title: "", body: "" });
+  const { data: banners = [] } = useQuery({
+    enabled: isAdmin && section === "settings", queryKey: ["admin-banners"], queryFn: () => apiFetch("/admin/banners"),
+  });
+  useQuery({
+    enabled: isAdmin && section === "settings", queryKey: ["admin-page", pageSlug],
+    queryFn: async () => { const p = await apiFetch(`/cms/pages/${pageSlug}`).catch(() => null); setPageForm({ title: p?.title ?? "", body: p?.body ?? "" }); return p ?? {}; },
+  });
+  const createBanner = useMutation({
+    mutationFn: () => apiFetch("/admin/banners", { method: "POST", body: JSON.stringify({ title: banner.title, image_url: banner.image_url }) }),
+    onSuccess: () => { toast.success("Banner added"); setBanner({ title: "", image_url: "" }); qc.invalidateQueries({ queryKey: ["admin-banners"] }); qc.invalidateQueries({ queryKey: ["banners"] }); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const toggleBanner = useMutation({
+    mutationFn: ({ id, is_active }: { id: string; is_active: boolean }) => apiFetch(`/admin/banners/${id}`, { method: "PATCH", body: JSON.stringify({ is_active }) }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin-banners"] }); qc.invalidateQueries({ queryKey: ["banners"] }); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const savePage = useMutation({
+    mutationFn: () => apiFetch(`/admin/pages/${pageSlug}`, { method: "PUT", body: JSON.stringify(pageForm) }),
+    onSuccess: () => { toast.success("Page saved"); qc.invalidateQueries({ queryKey: ["admin-page", pageSlug] }); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  // User detail drawer
+  const [detailUserId, setDetailUserId] = useState<string | null>(null);
+  const [editUser, setEditUser] = useState({ name: "", phone: "", city: "" });
+  const { data: userDetail, isLoading: detailLoading } = useQuery({
+    enabled: !!detailUserId, queryKey: ["admin-user", detailUserId], queryFn: () => apiFetch(`/admin/users/${detailUserId}`),
+  });
+  useEffect(() => {
+    if (userDetail?.profile) setEditUser({ name: userDetail.profile.name ?? "", phone: userDetail.profile.phone ?? "", city: userDetail.profile.city ?? "" });
+  }, [userDetail]);
+
+  const saveUser = useMutation({
+    mutationFn: (body: object) => apiFetch(`/admin/users/${detailUserId}`, { method: "PATCH", body: JSON.stringify(body) }),
+    onSuccess: () => { toast.success("User updated"); qc.invalidateQueries({ queryKey: ["admin-user", detailUserId] }); qc.invalidateQueries({ queryKey: ["admin-users"] }); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const deleteUser = useMutation({
+    mutationFn: () => apiFetch(`/admin/users/${detailUserId}`, { method: "DELETE" }),
+    onSuccess: () => { toast.success("User deleted"); setDetailUserId(null); qc.invalidateQueries({ queryKey: ["admin-users"] }); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  // Admin management (super-admin only)
+  const [promoteEmail, setPromoteEmail] = useState("");
+  const { data: admins = [] } = useQuery({
+    enabled: isSuperAdmin && section === "admins", queryKey: ["admin-admins"], queryFn: () => apiFetch("/admin/admins"),
+  });
+  const promote = useMutation({
+    mutationFn: (body: object) => apiFetch("/admin/admins", { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => { toast.success("Role updated"); setPromoteEmail(""); qc.invalidateQueries({ queryKey: ["admin-admins"] }); },
+    onError: (e: any) => toast.error(e.message),
   });
 
   const verify = useMutation({
     mutationFn: ({ id, is_verified }: { id: string; is_verified: boolean }) =>
-      apiFetch(`/providers/${id}`, { method: 'PATCH', body: JSON.stringify({ is_verified }) }),
+      apiFetch(`/experts/${id}`, { method: "PATCH", body: JSON.stringify({ is_verified }) }),
     onSuccess: (_d, v) => {
-      toast.success(v.is_verified ? "Provider approved" : "Provider rejected");
+      toast.success(v.is_verified ? "Expert approved" : "Expert rejected");
       qc.invalidateQueries({ queryKey: ["admin-overview"] });
-      qc.invalidateQueries({ queryKey: ["admin-providers"] });
+      qc.invalidateQueries({ queryKey: ["admin-experts"] });
     },
     onError: (e: any) => toast.error(e.message),
   });
 
-  const toggleCategory = useMutation({
+  const toggleService = useMutation({
     mutationFn: ({ id, is_active }: { id: string; is_active: boolean }) =>
-      apiFetch(`/categories/${id}`, { method: 'PATCH', body: JSON.stringify({ is_active }) }),
-    onSuccess: () => { toast.success("Category updated"); qc.invalidateQueries({ queryKey: ["admin-overview"] }); },
+      apiFetch(`/services/${id}`, { method: "PATCH", body: JSON.stringify({ is_active }) }),
+    onSuccess: () => { toast.success("Service updated"); qc.invalidateQueries({ queryKey: ["admin-overview"] }); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const createService = useMutation({
+    mutationFn: (body: object) => apiFetch("/services", { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => {
+      toast.success("Service created"); setSvcOpen(false);
+      setSvcForm({ name: "", slug: "", tagline: "", rate_per_hour: "", icon_name: "Sparkles" });
+      qc.invalidateQueries({ queryKey: ["admin-overview"] });
+    },
     onError: (e: any) => toast.error(e.message),
   });
 
   const toggleCoupon = useMutation({
     mutationFn: ({ id, is_active }: { id: string; is_active: boolean }) =>
-      apiFetch(`/admin/coupons/${id}`, { method: 'PATCH', body: JSON.stringify({ is_active }) }),
+      apiFetch(`/admin/coupons/${id}`, { method: "PATCH", body: JSON.stringify({ is_active }) }),
     onSuccess: () => { toast.success("Coupon updated"); qc.invalidateQueries({ queryKey: ["admin-overview"] }); },
     onError: (e: any) => toast.error(e.message),
   });
-
   const createCoupon = useMutation({
-    mutationFn: (body: object) => apiFetch('/admin/coupons', { method: 'POST', body: JSON.stringify(body) }),
+    mutationFn: (body: object) => apiFetch("/admin/coupons", { method: "POST", body: JSON.stringify(body) }),
     onSuccess: () => {
       toast.success("Coupon created"); setCouponOpen(false);
       setCouponForm({ code: "", type: "FLAT", value: "", max_uses: "" });
@@ -233,102 +326,62 @@ function AdminDashboard() {
     onError: (e: any) => toast.error(e.message),
   });
 
-  const createCategory = useMutation({
-    mutationFn: (body: object) => apiFetch('/categories', { method: 'POST', body: JSON.stringify(body) }),
-    onSuccess: () => {
-      toast.success("Category created"); setCatOpen(false);
-      setCatForm({ name: "", base_price: "", commission_pct: "15", icon_name: "Sparkles" });
-      qc.invalidateQueries({ queryKey: ["admin-overview"] });
-    },
-    onError: (e: any) => toast.error(e.message),
-  });
-
   if (loading || isLoading) return <div className="flex h-[60vh] items-center justify-center"><LoadingSpinner /></div>;
 
-  // ── Derived chart data ───────────────────────────────────────────────────
-  const categoryChartData = (data?.categories ?? []).map((c: any) => ({
-    name: c.name,
-    price: Number(c.base_price),
-    commission: Number(c.commission_pct),
-  }));
+  const serviceChartData = (data?.services ?? []).map((s: any) => ({ name: s.name, rate: Number(s.rate_per_hour) }));
+  const recent = data?.recentBookings ?? [];
+  const statusData = [
+    { name: "Completed", value: recent.filter((b: any) => b.status === "COMPLETED").length, color: "#10b981" },
+    { name: "Active", value: recent.filter((b: any) => ["ASSIGNED","ON_THE_WAY","ARRIVED","IN_PROGRESS"].includes(b.status)).length, color: "#6366f1" },
+    { name: "Searching", value: recent.filter((b: any) => b.status === "SEARCHING").length, color: "#f59e0b" },
+    { name: "Cancelled", value: recent.filter((b: any) => b.status === "CANCELLED").length, color: "#ef4444" },
+  ].filter((d) => d.value > 0);
+  const pending = (data?.pending ?? []).filter((p: any) => !kycQ || (p.profiles?.name ?? "").toLowerCase().includes(kycQ.toLowerCase()));
 
-  const bookingStatusData = [
-    { name: "Completed", value: (data?.recentBookings ?? []).filter((b: any) => b.status === "COMPLETED").length, color: "#10b981" },
-    { name: "Pending",   value: (data?.recentBookings ?? []).filter((b: any) => b.status === "PENDING").length,   color: "#f59e0b" },
-    { name: "Cancelled", value: (data?.recentBookings ?? []).filter((b: any) => b.status === "CANCELLED").length, color: "#ef4444" },
-    { name: "Other",     value: (data?.recentBookings ?? []).filter((b: any) => !["COMPLETED","PENDING","CANCELLED"].includes(b.status)).length, color: "#6366f1" },
-  ].filter(d => d.value > 0);
-
-  const filteredPending = (data?.pending ?? []).filter((p: any) =>
-    !kycQ || (p.profiles?.name ?? "").toLowerCase().includes(kycQ.toLowerCase())
-  );
-
-  // ── Render ───────────────────────────────────────────────────────────────
   return (
     <div className="flex min-h-[calc(100vh-4rem)]">
-      <Sidebar active={section} onChange={setSection} overviewData={data} />
-
-      {/* Main content */}
+      <Sidebar active={section} onChange={setSection} data={data} isSuperAdmin={isSuperAdmin} />
       <div className="flex-1 overflow-auto">
-        <div className="max-w-6xl mx-auto px-6 py-8">
+        <div className="mx-auto max-w-6xl px-6 py-8">
 
-          {/* ── OVERVIEW ─────────────────────────────────────────────────── */}
           {section === "overview" && (
             <div className="space-y-8">
               <div>
                 <h1 className="text-2xl font-bold">Operations Overview</h1>
-                <p className="text-sm text-muted-foreground mt-0.5">Platform health, revenue & growth</p>
+                <p className="mt-0.5 text-sm text-muted-foreground">Platform health, revenue & growth</p>
               </div>
-
-              {/* KPIs */}
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <StatCard icon={IndianRupee} label="Platform Revenue" value={`₹${Number(data?.totalRevenue ?? 0).toLocaleString('en-IN')}`} sub={`GMV ₹${Number(data?.gmv ?? 0).toLocaleString('en-IN')}`} color="bg-emerald-500/10 text-emerald-600" />
-                <StatCard icon={Briefcase}   label="Total Bookings"   value={data?.bookings ?? 0}   sub="All time" color="bg-primary/10 text-primary" />
-                <StatCard icon={Users}       label="Customers"        value={data?.customers ?? 0}  sub={`+ ${data?.providers ?? 0} providers`} color="bg-blue-500/10 text-blue-600" />
-                <StatCard icon={ShieldCheck} label="Pending KYC"      value={data?.pending?.length ?? 0} sub="Awaiting review" color="bg-amber-500/10 text-amber-600"
-                  trend={data?.pending?.length > 0 ? `${data.pending.length} new` : null} />
+                <StatCard icon={IndianRupee} label="Platform Revenue" value={`₹${Number(data?.totalRevenue ?? 0).toLocaleString("en-IN")}`} sub={`GMV ₹${Number(data?.gmv ?? 0).toLocaleString("en-IN")}`} color="bg-emerald-500/10 text-emerald-600" />
+                <StatCard icon={Briefcase} label="Total Bookings" value={data?.bookings ?? 0} sub="All time" color="bg-primary/10 text-primary" />
+                <StatCard icon={Users} label="Customers" value={data?.customers ?? 0} sub={`+ ${data?.experts ?? 0} experts`} color="bg-blue-500/10 text-blue-600" />
+                <StatCard icon={ShieldCheck} label="Pending KYC" value={data?.pending?.length ?? 0} sub="Awaiting review" color="bg-amber-500/10 text-amber-600" />
               </div>
-
-              {/* Charts row */}
               <div className="grid gap-6 lg:grid-cols-5">
-                {/* Category pricing bar */}
-                <div className="lg:col-span-3 rounded-2xl border bg-card p-5">
-                  <div className="mb-4">
-                    <h3 className="font-semibold">Service Categories</h3>
-                    <p className="text-xs text-muted-foreground">Base price by category</p>
-                  </div>
-                  {categoryChartData.length === 0 ? (
-                    <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">No categories yet</div>
-                  ) : (
+                <div className="rounded-2xl border bg-card p-5 lg:col-span-3">
+                  <h3 className="font-semibold">Service rates</h3>
+                  <p className="mb-4 text-xs text-muted-foreground">Hourly rate by service</p>
+                  {serviceChartData.length === 0 ? <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">No services</div> : (
                     <ResponsiveContainer width="100%" height={180}>
-                      <BarChart data={categoryChartData} barCategoryGap="35%">
-                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                        <XAxis dataKey="name" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-                        <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={v => `₹${v}`} />
-                        <Tooltip formatter={(v: any) => [`₹${v}`, "Base price"]} contentStyle={{ borderRadius: 8, fontSize: 12 }} />
-                        <Bar dataKey="price" radius={[6, 6, 0, 0]}>
-                          {categoryChartData.map((_: any, i: number) => (
-                            <Cell key={i} fill={["#6366f1","#10b981","#f59e0b","#3b82f6","#ec4899"][i % 5]} />
-                          ))}
+                      <BarChart data={serviceChartData} barCategoryGap="35%">
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis dataKey="name" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
+                        <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={(v) => `₹${v}`} />
+                        <Tooltip formatter={(v: any) => [`₹${v}/hr`, "Rate"]} contentStyle={{ borderRadius: 8, fontSize: 12 }} />
+                        <Bar dataKey="rate" radius={[6, 6, 0, 0]}>
+                          {serviceChartData.map((_: any, i: number) => <Cell key={i} fill={["#6366f1","#10b981","#f59e0b","#3b82f6","#ec4899","#14b8a6"][i % 6]} />)}
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>
                   )}
                 </div>
-
-                {/* Booking status donut */}
-                <div className="lg:col-span-2 rounded-2xl border bg-card p-5">
-                  <div className="mb-4">
-                    <h3 className="font-semibold">Booking Status</h3>
-                    <p className="text-xs text-muted-foreground">Recent 10 bookings</p>
-                  </div>
-                  {bookingStatusData.length === 0 ? (
-                    <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">No booking data</div>
-                  ) : (
+                <div className="rounded-2xl border bg-card p-5 lg:col-span-2">
+                  <h3 className="font-semibold">Booking status</h3>
+                  <p className="mb-4 text-xs text-muted-foreground">Recent bookings</p>
+                  {statusData.length === 0 ? <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">No data</div> : (
                     <ResponsiveContainer width="100%" height={180}>
                       <PieChart>
-                        <Pie data={bookingStatusData} cx="50%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={3} dataKey="value">
-                          {bookingStatusData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                        <Pie data={statusData} cx="50%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={3} dataKey="value">
+                          {statusData.map((e, i) => <Cell key={i} fill={e.color} />)}
                         </Pie>
                         <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12 }} />
                         <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />
@@ -337,73 +390,45 @@ function AdminDashboard() {
                   )}
                 </div>
               </div>
-
-              {/* Recent bookings + pending KYC side-by-side */}
               <div className="grid gap-6 lg:grid-cols-2">
-                {/* Recent bookings */}
-                <div className="rounded-2xl border bg-card overflow-hidden">
-                  <div className="flex items-center justify-between px-5 py-4 border-b">
-                    <div>
-                      <h3 className="font-semibold">Recent Bookings</h3>
-                      <p className="text-xs text-muted-foreground">Last 5</p>
-                    </div>
-                    <Button variant="ghost" size="sm" className="text-xs" onClick={() => setSection("bookings")}>
-                      View all <ArrowUpRight className="ml-1 h-3 w-3" />
-                    </Button>
-                  </div>
+                <div className="overflow-hidden rounded-2xl border bg-card">
+                  <div className="border-b px-5 py-4"><h3 className="font-semibold">Recent bookings</h3></div>
                   <div className="divide-y">
-                    {(data?.recentBookings ?? []).slice(0, 5).length === 0 ? (
-                      <p className="py-8 text-center text-sm text-muted-foreground">No bookings yet</p>
-                    ) : (data?.recentBookings ?? []).slice(0, 5).map((b: any) => (
-                      <div key={b.id} className="flex items-center justify-between px-5 py-3">
-                        <div className="min-w-0">
-                          <div className="font-medium text-sm truncate">{b.category_name ?? "Service"}</div>
-                          <div className="text-xs text-muted-foreground">{b.customer_name ?? "—"} · {String(b.scheduled_date).slice(0,10)}</div>
+                    {recent.slice(0, 6).length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">No bookings yet</p> :
+                      recent.slice(0, 6).map((b: any) => (
+                        <div key={b.id} className="flex items-center justify-between px-5 py-3">
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-medium">{b.service_name ?? "Service"}</div>
+                            <div className="text-xs text-muted-foreground">{b.customer_name ?? "—"} · {b.booking_type}</div>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-3">
+                            <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold", STATUS_PILL[b.status] ?? "")}>{b.status}</span>
+                            <span className="text-sm font-semibold">₹{Number(b.total_amount).toLocaleString("en-IN")}</span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-3 shrink-0">
-                          <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold", STATUS_PILL[b.status] ?? "")}>{b.status}</span>
-                          <span className="text-sm font-semibold">₹{Number(b.total_amount).toLocaleString('en-IN')}</span>
-                        </div>
-                      </div>
-                    ))}
+                      ))}
                   </div>
                 </div>
-
-                {/* Pending KYC mini-list */}
-                <div className="rounded-2xl border bg-card overflow-hidden">
-                  <div className="flex items-center justify-between px-5 py-4 border-b">
-                    <div>
-                      <h3 className="font-semibold">KYC Queue</h3>
-                      <p className="text-xs text-muted-foreground">{filteredPending.length} providers awaiting</p>
-                    </div>
-                    <Button variant="ghost" size="sm" className="text-xs" onClick={() => setSection("kyc")}>
-                      Review all <ArrowUpRight className="ml-1 h-3 w-3" />
-                    </Button>
+                <div className="overflow-hidden rounded-2xl border bg-card">
+                  <div className="flex items-center justify-between border-b px-5 py-4">
+                    <h3 className="font-semibold">KYC queue</h3>
+                    <Button variant="ghost" size="sm" className="text-xs" onClick={() => setSection("kyc")}>Review all</Button>
                   </div>
                   <div className="divide-y">
-                    {filteredPending.length === 0 ? (
-                      <div className="flex flex-col items-center py-8 gap-2">
-                        <CheckCircle2 className="h-8 w-8 text-emerald-500" />
-                        <p className="text-sm text-muted-foreground">All caught up!</p>
-                      </div>
-                    ) : filteredPending.slice(0, 5).map((p: any) => (
+                    {pending.length === 0 ? (
+                      <div className="flex flex-col items-center gap-2 py-8"><CheckCircle2 className="h-8 w-8 text-emerald-500" /><p className="text-sm text-muted-foreground">All caught up!</p></div>
+                    ) : pending.slice(0, 5).map((p: any) => (
                       <div key={p.id} className="flex items-center justify-between px-5 py-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-bold text-white", avatarBg(p.profiles?.name ?? ""))}>
-                            {initials(p.profiles?.name ?? "P")}
-                          </div>
+                        <div className="flex min-w-0 items-center gap-3">
+                          <Avatar src={p.profiles?.avatar_url} name={p.profiles?.name ?? "E"} size={32} />
                           <div className="min-w-0">
-                            <div className="font-medium text-sm truncate">{p.profiles?.name ?? "Provider"}</div>
-                            <div className="text-xs text-muted-foreground">{p.profiles?.city ?? "—"} · {p.experience_years ?? 0}y exp</div>
+                            <div className="truncate text-sm font-medium">{p.profiles?.name ?? "Expert"}</div>
+                            <div className="text-xs text-muted-foreground">{p.profiles?.city ?? "—"} · {p.experience_years ?? 0}y</div>
                           </div>
                         </div>
-                        <div className="flex gap-1.5 shrink-0">
-                          <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => verify.mutate({ id: p.id, is_verified: false })}>
-                            <XCircle className="h-3 w-3" />
-                          </Button>
-                          <Button size="sm" className="h-7 px-2 text-xs" onClick={() => verify.mutate({ id: p.id, is_verified: true })}>
-                            <CheckCircle2 className="h-3 w-3" />
-                          </Button>
+                        <div className="flex shrink-0 gap-1.5">
+                          <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => verify.mutate({ id: p.id, is_verified: false })}><XCircle className="h-3 w-3" /></Button>
+                          <Button size="sm" className="h-7 px-2" onClick={() => verify.mutate({ id: p.id, is_verified: true })}><CheckCircle2 className="h-3 w-3" /></Button>
                         </div>
                       </div>
                     ))}
@@ -413,42 +438,41 @@ function AdminDashboard() {
             </div>
           )}
 
-          {/* ── KYC QUEUE ────────────────────────────────────────────────── */}
           {section === "kyc" && (
             <div>
-              <SectionHead title="KYC Queue" desc="Review and approve provider verification requests" />
+              <SectionHead title="KYC Queue" desc="Review and approve expert verification requests" />
               <div className="relative mb-5 max-w-sm">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input value={kycQ} onChange={e => setKycQ(e.target.value)} placeholder="Search by name…" className="pl-9" />
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input value={kycQ} onChange={(e) => setKycQ(e.target.value)} placeholder="Search by name…" className="pl-9" />
               </div>
-              {filteredPending.length === 0 ? (
-                <div className="flex flex-col items-center py-20 gap-3 rounded-2xl border bg-muted/20">
+              {pending.length === 0 ? (
+                <div className="flex flex-col items-center gap-3 rounded-2xl border bg-muted/20 py-20">
                   <div className="grid h-14 w-14 place-items-center rounded-full bg-emerald-100"><CheckCircle2 className="h-7 w-7 text-emerald-600" /></div>
                   <p className="font-medium">All caught up!</p>
-                  <p className="text-sm text-muted-foreground">No providers awaiting verification.</p>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {filteredPending.map((p: any) => (
-                    <div key={p.id} className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border bg-card p-5 hover:shadow-sm transition-shadow">
-                      <div className="flex items-center gap-4 min-w-0">
-                        <div className={cn("grid h-12 w-12 shrink-0 place-items-center rounded-2xl text-base font-bold text-white", avatarBg(p.profiles?.name ?? ""))}>
-                          {initials(p.profiles?.name ?? "P")}
-                        </div>
+                  {pending.map((p: any) => (
+                    <div key={p.id} className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border bg-card p-5">
+                      <div className="flex min-w-0 items-center gap-4">
+                        <Avatar src={p.profiles?.avatar_url} name={p.profiles?.name ?? "E"} size={48} className="rounded-2xl" />
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-semibold">{p.profiles?.name ?? "Provider"}</span>
+                            <span className="font-semibold">{p.profiles?.name ?? "Expert"}</span>
                             {p.profiles?.city && <Badge variant="secondary" className="text-[10px]">{p.profiles.city}</Badge>}
-                            <span className="text-xs text-muted-foreground">{p.experience_years ?? 0} yrs exp · ₹{Number(p.hourly_rate).toLocaleString('en-IN')}/hr</span>
+                            <span className="text-xs capitalize text-muted-foreground">{(p.gender ?? "").toLowerCase()} · {p.experience_years ?? 0} yrs</span>
                           </div>
-                          <p className="mt-1 text-sm text-muted-foreground line-clamp-1">{p.bio || "No bio provided"}</p>
+                          <p className="mt-1 line-clamp-1 text-sm text-muted-foreground">{p.bio || "No bio provided"}</p>
                         </div>
                       </div>
                       <div className="flex gap-2">
                         <Button size="sm" variant="outline" className="border-red-200 text-red-600 hover:bg-red-50" onClick={() => verify.mutate({ id: p.id, is_verified: false })}>
                           <XCircle className="mr-1.5 h-3.5 w-3.5" /> Reject
                         </Button>
-                        <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => verify.mutate({ id: p.id, is_verified: true })}>
+                        <Button size="sm" variant="outline" onClick={() => setDocsExpert({ id: p.id, name: p.profiles?.name ?? "Expert" })}>
+                          <BookOpen className="mr-1.5 h-3.5 w-3.5" /> Docs
+                        </Button>
+                        <Button size="sm" className="bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => verify.mutate({ id: p.id, is_verified: true })}>
                           <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> Approve
                         </Button>
                       </div>
@@ -456,20 +480,46 @@ function AdminDashboard() {
                   ))}
                 </div>
               )}
+
+              {/* KYC document review dialog */}
+              <Dialog open={!!docsExpert} onOpenChange={(o) => !o && setDocsExpert(null)}>
+                <DialogContent className="max-w-lg">
+                  <DialogHeader><DialogTitle>Documents — {docsExpert?.name}</DialogTitle></DialogHeader>
+                  {docsLoading ? <LoadingSpinner /> : (expertDocs as any[]).length === 0 ? (
+                    <p className="py-6 text-center text-sm text-muted-foreground">No documents submitted yet.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {(expertDocs as any[]).map((d) => (
+                        <div key={d.id} className="flex items-center justify-between gap-3 rounded-xl border p-3">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 text-sm font-medium">{d.type}
+                              <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                                d.status === "APPROVED" ? "bg-emerald-100 text-emerald-700" : d.status === "REJECTED" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700")}>{d.status}</span>
+                            </div>
+                            <a href={d.file_url} target="_blank" rel="noreferrer" className="truncate text-xs text-primary hover:underline">{d.file_url}</a>
+                          </div>
+                          <div className="flex shrink-0 gap-1.5">
+                            <Button size="sm" variant="outline" className="h-7 border-red-200 text-red-600 hover:bg-red-50" onClick={() => reviewDoc.mutate({ docId: d.id, status: "REJECTED" })}>Reject</Button>
+                            <Button size="sm" className="h-7 bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => reviewDoc.mutate({ docId: d.id, status: "APPROVED" })}>Approve</Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </DialogContent>
+              </Dialog>
             </div>
           )}
 
-          {/* ── PROVIDERS ────────────────────────────────────────────────── */}
-          {section === "providers" && (
+          {section === "experts" && (
             <div>
-              <SectionHead title="Providers" desc={`${allProviders.length} service professionals`} />
-              <div className="flex flex-wrap gap-3 mb-5">
-                <div className="relative flex-1 min-w-52">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input value={provQ} onChange={e => setProvQ(e.target.value)} placeholder="Search by name…" className="pl-9" />
+              <SectionHead title="Experts" desc={`${experts.length} household experts`} />
+              <div className="mb-5 flex flex-wrap gap-3">
+                <div className="relative min-w-52 flex-1">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input value={expQ} onChange={(e) => setExpQ(e.target.value)} placeholder="Search by name…" className="pl-9" />
                 </div>
-                <Input value={provCity} onChange={e => setProvCity(e.target.value)} placeholder="City…" className="w-32" />
-                <Select value={provStatus} onValueChange={setProvStatus}>
+                <Select value={expStatus} onValueChange={setExpStatus}>
                   <SelectTrigger className="w-36"><SelectValue placeholder="Status" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All statuses</SelectItem>
@@ -478,31 +528,23 @@ function AdminDashboard() {
                     <SelectItem value="BUSY">Busy</SelectItem>
                   </SelectContent>
                 </Select>
-                <Select value={provVerified} onValueChange={setProvVerified}>
+                <Select value={expVerified} onValueChange={setExpVerified}>
                   <SelectTrigger className="w-36"><SelectValue placeholder="Verified" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All</SelectItem>
-                    <SelectItem value="true">Verified only</SelectItem>
+                    <SelectItem value="true">Verified</SelectItem>
                     <SelectItem value="false">Unverified</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-
-              {provsLoading ? (
-                <div className="flex h-40 items-center justify-center"><LoadingSpinner /></div>
-              ) : allProviders.length === 0 ? (
-                <div className="flex flex-col items-center py-16 rounded-2xl border bg-muted/20 gap-2">
-                  <Users className="h-8 w-8 text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">No providers match your filters</p>
-                </div>
-              ) : (
+              {expLoading ? <div className="flex h-40 items-center justify-center"><LoadingSpinner /></div> : (
                 <div className="overflow-hidden rounded-2xl border bg-card">
                   <table className="w-full text-sm">
                     <thead className="bg-muted/30 text-xs font-medium text-muted-foreground">
                       <tr>
-                        <th className="px-5 py-3.5 text-left">Provider</th>
-                        <th className="px-5 py-3.5 text-left">Location</th>
-                        <th className="px-5 py-3.5 text-left">Rate</th>
+                        <th className="px-5 py-3.5 text-left">Expert</th>
+                        <th className="px-5 py-3.5 text-left">City</th>
+                        <th className="px-5 py-3.5 text-left">Jobs</th>
                         <th className="px-5 py-3.5 text-left">Rating</th>
                         <th className="px-5 py-3.5 text-left">Status</th>
                         <th className="px-5 py-3.5 text-left">Verified</th>
@@ -510,47 +552,23 @@ function AdminDashboard() {
                       </tr>
                     </thead>
                     <tbody>
-                      {allProviders.map((p: any) => (
-                        <tr key={p.id} className="border-t hover:bg-muted/20 transition-colors">
-                          <td className="px-5 py-3">
-                            <div className="flex items-center gap-3">
-                              <div className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-bold text-white", avatarBg(p.name ?? ""))}>
-                                {initials(p.name ?? "P")}
+                      {experts.length === 0 ? <tr><td colSpan={7} className="py-12 text-center text-muted-foreground">No experts match</td></tr> :
+                        experts.map((e: any) => (
+                          <tr key={e.id} className="border-t hover:bg-muted/20">
+                            <td className="px-5 py-3">
+                              <div className="flex items-center gap-3">
+                                <Avatar src={e.avatar_url} name={e.name ?? "E"} size={32} />
+                                <div className="font-medium">{e.name ?? "Expert"}</div>
                               </div>
-                              <div>
-                                <div className="font-medium">{p.name ?? "Provider"}</div>
-                                <div className="text-xs text-muted-foreground">{p.phone ?? "—"}</div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-5 py-3 text-muted-foreground">{p.city ?? "—"}</td>
-                          <td className="px-5 py-3 font-medium">₹{Number(p.hourly_rate).toLocaleString('en-IN')}</td>
-                          <td className="px-5 py-3">
-                            <div className="flex items-center gap-1">
-                              <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-                              <span>{Number(p.avg_rating).toFixed(1)}</span>
-                              <span className="text-muted-foreground text-xs">({p.review_count})</span>
-                            </div>
-                          </td>
-                          <td className="px-5 py-3">
-                            <div className="flex items-center gap-1.5">
-                              <StatusDot status={p.status} />
-                              <span className="text-xs capitalize">{(p.status ?? "offline").toLowerCase()}</span>
-                            </div>
-                          </td>
-                          <td className="px-5 py-3">
-                            {p.is_verified
-                              ? <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600"><CheckCircle2 className="h-3.5 w-3.5" />Verified</span>
-                              : <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600"><AlertCircle className="h-3.5 w-3.5" />Pending</span>}
-                          </td>
-                          <td className="px-5 py-3 text-right">
-                            <Button size="sm" variant="outline" className="h-7 text-xs"
-                              onClick={() => verify.mutate({ id: p.id, is_verified: !p.is_verified })}>
-                              {p.is_verified ? "Revoke" : "Approve"}
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
+                            </td>
+                            <td className="px-5 py-3 text-muted-foreground">{e.city ?? "—"}</td>
+                            <td className="px-5 py-3">{e.total_jobs ?? 0}</td>
+                            <td className="px-5 py-3"><div className="flex items-center gap-1"><Star className="h-3 w-3 fill-amber-400 text-amber-400" />{Number(e.avg_rating).toFixed(1)} <span className="text-xs text-muted-foreground">({e.review_count})</span></div></td>
+                            <td className="px-5 py-3"><div className="flex items-center gap-1.5"><StatusDot status={e.status} /><span className="text-xs capitalize">{(e.status ?? "offline").toLowerCase()}</span></div></td>
+                            <td className="px-5 py-3">{e.is_verified ? <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600"><CheckCircle2 className="h-3.5 w-3.5" />Verified</span> : <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600"><AlertCircle className="h-3.5 w-3.5" />Pending</span>}</td>
+                            <td className="px-5 py-3 text-right"><Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => verify.mutate({ id: e.id, is_verified: !e.is_verified })}>{e.is_verified ? "Revoke" : "Approve"}</Button></td>
+                          </tr>
+                        ))}
                     </tbody>
                   </table>
                 </div>
@@ -558,51 +576,35 @@ function AdminDashboard() {
             </div>
           )}
 
-          {/* ── BOOKINGS ─────────────────────────────────────────────────── */}
           {section === "bookings" && (
             <div>
               <SectionHead title="All Bookings" desc="Complete platform booking history"
-                action={
-                  <Button variant="outline" size="sm" onClick={() => qc.invalidateQueries({ queryKey: ["admin-bookings"] })}>
-                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Refresh
-                  </Button>
-                }
-              />
-              {bookingsLoading ? (
-                <div className="flex h-40 items-center justify-center"><LoadingSpinner /></div>
-              ) : (
+                action={<Button variant="outline" size="sm" onClick={() => qc.invalidateQueries({ queryKey: ["admin-bookings"] })}><RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Refresh</Button>} />
+              {bookingsLoading ? <div className="flex h-40 items-center justify-center"><LoadingSpinner /></div> : (
                 <div className="overflow-hidden rounded-2xl border bg-card">
                   <table className="w-full text-sm">
                     <thead className="bg-muted/30 text-xs font-medium text-muted-foreground">
                       <tr>
                         <th className="px-5 py-3.5 text-left">Service</th>
                         <th className="px-5 py-3.5 text-left">Customer</th>
-                        <th className="px-5 py-3.5 text-left">Provider</th>
-                        <th className="px-5 py-3.5 text-left">Scheduled</th>
+                        <th className="px-5 py-3.5 text-left">Expert</th>
+                        <th className="px-5 py-3.5 text-left">Type</th>
                         <th className="px-5 py-3.5 text-left">Status</th>
                         <th className="px-5 py-3.5 text-right">Amount</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {allBookings.length === 0 ? (
-                        <tr><td colSpan={6} className="py-12 text-center text-muted-foreground">No bookings yet</td></tr>
-                      ) : allBookings.map((b: any) => (
-                        <tr key={b.id} className="border-t hover:bg-muted/20 transition-colors">
-                          <td className="px-5 py-3 font-medium">{b.category_name ?? "Service"}</td>
-                          <td className="px-5 py-3 text-muted-foreground">{b.customer_name ?? "—"}</td>
-                          <td className="px-5 py-3 text-muted-foreground">{b.provider_name ?? "—"}</td>
-                          <td className="px-5 py-3 text-xs">
-                            <div>{String(b.scheduled_date).slice(0,10)}</div>
-                            <div className="text-muted-foreground">{String(b.scheduled_time).slice(0,5)}</div>
-                          </td>
-                          <td className="px-5 py-3">
-                            <span className={cn("rounded-full px-2.5 py-0.5 text-[10px] font-semibold", STATUS_PILL[b.status] ?? "")}>
-                              {b.status}
-                            </span>
-                          </td>
-                          <td className="px-5 py-3 text-right font-semibold">₹{Number(b.total_amount).toLocaleString('en-IN')}</td>
-                        </tr>
-                      ))}
+                      {allBookings.length === 0 ? <tr><td colSpan={6} className="py-12 text-center text-muted-foreground">No bookings yet</td></tr> :
+                        allBookings.map((b: any) => (
+                          <tr key={b.id} className="border-t hover:bg-muted/20">
+                            <td className="px-5 py-3 font-medium">{b.service_name ?? "Service"}</td>
+                            <td className="px-5 py-3 text-muted-foreground">{b.customer_name ?? "—"}</td>
+                            <td className="px-5 py-3 text-muted-foreground">{b.expert_name ?? "—"}</td>
+                            <td className="px-5 py-3 text-xs">{b.booking_type}</td>
+                            <td className="px-5 py-3"><span className={cn("rounded-full px-2.5 py-0.5 text-[10px] font-semibold", STATUS_PILL[b.status] ?? "")}>{b.status}</span></td>
+                            <td className="px-5 py-3 text-right font-semibold">₹{Number(b.total_amount).toLocaleString("en-IN")}</td>
+                          </tr>
+                        ))}
                     </tbody>
                   </table>
                 </div>
@@ -610,220 +612,259 @@ function AdminDashboard() {
             </div>
           )}
 
-          {/* ── USERS ────────────────────────────────────────────────────── */}
           {section === "users" && (
             <div>
-              <SectionHead title="Users" desc={`${allUsers.length} registered accounts`} />
-              {usersLoading ? (
-                <div className="flex h-40 items-center justify-center"><LoadingSpinner /></div>
-              ) : (
+              <SectionHead title="Users" desc={`${users.length} registered accounts`} />
+              <div className="relative mb-4 max-w-sm">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input value={userQ} onChange={(e) => setUserQ(e.target.value)} placeholder="Search by name or email…" className="pl-9" />
+              </div>
+              {usersLoading ? <div className="flex h-40 items-center justify-center"><LoadingSpinner /></div> : (
                 <div className="overflow-hidden rounded-2xl border bg-card">
                   <table className="w-full text-sm">
                     <thead className="bg-muted/30 text-xs font-medium text-muted-foreground">
-                      <tr>
-                        <th className="px-5 py-3.5 text-left">User</th>
-                        <th className="px-5 py-3.5 text-left">Role</th>
-                        <th className="px-5 py-3.5 text-left">Location</th>
-                        <th className="px-5 py-3.5 text-left">Phone</th>
-                        <th className="px-5 py-3.5 text-left">Joined</th>
-                      </tr>
+                      <tr><th className="px-5 py-3.5 text-left">User</th><th className="px-5 py-3.5 text-left">Role</th><th className="px-5 py-3.5 text-left">City</th><th className="px-5 py-3.5 text-left">Phone</th><th className="px-5 py-3.5 text-right"></th></tr>
                     </thead>
                     <tbody>
-                      {allUsers.length === 0 ? (
-                        <tr><td colSpan={5} className="py-12 text-center text-muted-foreground">No users found</td></tr>
-                      ) : allUsers.map((u: any) => (
-                        <tr key={u.id} className="border-t hover:bg-muted/20 transition-colors">
-                          <td className="px-5 py-3">
-                            <div className="flex items-center gap-3">
-                              <div className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-bold text-white", avatarBg(u.name ?? u.email ?? ""))}>
-                                {initials(u.name ?? u.email ?? "?")}
+                      {users.length === 0 ? <tr><td colSpan={5} className="py-12 text-center text-muted-foreground">No users</td></tr> :
+                        users.map((u: any) => (
+                          <tr key={u.id} className="cursor-pointer border-t hover:bg-muted/20" onClick={() => setDetailUserId(u.id)}>
+                            <td className="px-5 py-3">
+                              <div className="flex items-center gap-3">
+                                <Avatar src={u.avatar_url} name={u.name ?? u.email ?? "?"} size={32} />
+                                <div>
+                                  <div className="flex items-center gap-1.5 font-medium">{u.name ?? "—"}
+                                    {u.is_blocked && <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[9px] font-semibold text-red-700">BLOCKED</span>}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">{u.email}</div>
+                                </div>
                               </div>
-                              <div>
-                                <div className="font-medium">{u.name ?? "—"}</div>
-                                <div className="text-xs text-muted-foreground">{u.email}</div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-5 py-3">
-                            <span className={cn("rounded-full px-2.5 py-0.5 text-[10px] font-semibold", ROLE_PILL[u.role] ?? "bg-slate-100 text-slate-600")}>
-                              {u.role}
-                            </span>
-                          </td>
-                          <td className="px-5 py-3 text-muted-foreground">{u.city ?? "—"}</td>
-                          <td className="px-5 py-3 text-muted-foreground">{u.phone ?? "—"}</td>
-                          <td className="px-5 py-3 text-xs text-muted-foreground">
-                            {u.created_at ? new Date(u.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}
-                          </td>
-                        </tr>
-                      ))}
+                            </td>
+                            <td className="px-5 py-3"><span className={cn("rounded-full px-2.5 py-0.5 text-[10px] font-semibold", ROLE_PILL[u.role] ?? "bg-slate-100 text-slate-600")}>{u.role}</span></td>
+                            <td className="px-5 py-3 text-muted-foreground">{u.city ?? "—"}</td>
+                            <td className="px-5 py-3 text-muted-foreground">{u.phone ?? "—"}</td>
+                            <td className="px-5 py-3 text-right text-xs text-primary">View</td>
+                          </tr>
+                        ))}
                     </tbody>
                   </table>
                 </div>
               )}
+
+              {/* User detail dialog — profile, history, CRUD */}
+              <Dialog open={!!detailUserId} onOpenChange={(o) => !o && setDetailUserId(null)}>
+                <DialogContent className="max-h-[85vh] max-w-lg overflow-auto">
+                  <DialogHeader><DialogTitle>User details</DialogTitle></DialogHeader>
+                  {detailLoading || !userDetail ? <LoadingSpinner /> : (
+                    <div className="space-y-4 text-sm">
+                      <div className="flex items-center gap-3">
+                        <Avatar src={userDetail.profile?.avatar_url} name={userDetail.profile?.name ?? userDetail.email} size={48} />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 font-semibold">{userDetail.profile?.name ?? "—"}
+                            {userDetail.is_blocked && <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-700">BLOCKED</span>}
+                          </div>
+                          <div className="text-xs text-muted-foreground">{userDetail.email} · {(userDetail.roles ?? []).join(", ")}</div>
+                        </div>
+                      </div>
+
+                      {/* Lifetime stats */}
+                      <div className="grid grid-cols-4 gap-2 text-center">
+                        {[
+                          { k: "Bookings", v: userDetail.stats?.bookings_made ?? 0 },
+                          { k: "Jobs", v: userDetail.stats?.jobs_done ?? 0 },
+                          { k: "Spent", v: `₹${userDetail.stats?.total_spent ?? 0}` },
+                          { k: "Reviews", v: userDetail.stats?.reviews_written ?? 0 },
+                        ].map((s) => (
+                          <div key={s.k} className="rounded-lg border p-2"><div className="text-sm font-bold">{s.v}</div><div className="text-[10px] uppercase text-muted-foreground">{s.k}</div></div>
+                        ))}
+                      </div>
+
+                      {/* Editable profile */}
+                      <div className="space-y-2 rounded-xl border p-3">
+                        <div className="text-[10px] font-semibold uppercase text-muted-foreground">Edit profile</div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <Input className="h-8" value={editUser.name} onChange={(e) => setEditUser({ ...editUser, name: e.target.value })} placeholder="Name" />
+                          <Input className="h-8" value={editUser.phone} onChange={(e) => setEditUser({ ...editUser, phone: e.target.value })} placeholder="Phone" />
+                          <Input className="h-8" value={editUser.city} onChange={(e) => setEditUser({ ...editUser, city: e.target.value })} placeholder="City" />
+                          <Button size="sm" className="h-8" onClick={() => saveUser.mutate(editUser)} disabled={saveUser.isPending}>Save</Button>
+                        </div>
+                      </div>
+
+                      {userDetail.expert && (
+                        <div className="rounded-xl border p-3">
+                          <div className="mb-1 text-[10px] font-semibold uppercase text-muted-foreground">Expert profile</div>
+                          <div className="text-xs">⭐ {Number(userDetail.expert.avg_rating ?? 0).toFixed(1)} · {userDetail.expert.total_jobs ?? 0} jobs · {userDetail.expert.is_verified ? "Verified" : "Unverified"} · {userDetail.expert.status}</div>
+                          {userDetail.expert.bio && <p className="mt-1 text-xs text-muted-foreground">{userDetail.expert.bio}</p>}
+                        </div>
+                      )}
+
+                      {/* Booking history */}
+                      <div>
+                        <div className="mb-1.5 text-[10px] font-semibold uppercase text-muted-foreground">Recent activity ({(userDetail.bookings ?? []).length})</div>
+                        {(userDetail.bookings ?? []).length === 0 ? <p className="text-xs text-muted-foreground">No bookings yet.</p> : (
+                          <div className="max-h-40 space-y-1 overflow-auto">
+                            {userDetail.bookings.map((b: any) => (
+                              <div key={b.id} className="flex items-center justify-between rounded-lg border px-3 py-1.5 text-xs">
+                                <span>{b.service_name} <span className="text-muted-foreground">· as {b.as_role}</span></span>
+                                <span className="flex items-center gap-2"><span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold", STATUS_PILL[b.status] ?? "bg-slate-100")}>{b.status}</span> ₹{b.total_amount}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center justify-between border-t pt-3">
+                        <span className="text-[11px] text-muted-foreground">Joined {userDetail.created_at ? new Date(userDetail.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}</span>
+                        <div className="flex gap-2">
+                          <Button size="sm" variant="outline" className={cn("h-8 text-xs", userDetail.is_blocked ? "text-emerald-600" : "text-amber-600")}
+                            onClick={() => saveUser.mutate({ is_blocked: !userDetail.is_blocked })} disabled={saveUser.isPending}>
+                            {userDetail.is_blocked ? "Unblock" : "Block"}
+                          </Button>
+                          {isSuperAdmin && !(userDetail.roles ?? []).includes("SUPER_ADMIN") && (
+                            <Button size="sm" variant="outline" className="h-8 border-red-200 text-xs text-red-600 hover:bg-red-50"
+                              onClick={() => { if (confirm("Permanently delete this user and all their data?")) deleteUser.mutate(); }} disabled={deleteUser.isPending}>
+                              Delete
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </DialogContent>
+              </Dialog>
             </div>
           )}
 
-          {/* ── CATEGORIES ───────────────────────────────────────────────── */}
-          {section === "categories" && (
+          {section === "services" && (
             <div>
-              <SectionHead title="Service Categories" desc="Manage available services on the platform"
+              <SectionHead title="Services" desc="Manage household services on the platform"
                 action={
-                  <Dialog open={catOpen} onOpenChange={setCatOpen}>
-                    <DialogTrigger asChild>
-                      <Button size="sm"><Plus className="mr-1.5 h-3.5 w-3.5" /> Add Category</Button>
-                    </DialogTrigger>
+                  <Dialog open={svcOpen} onOpenChange={setSvcOpen}>
+                    <DialogTrigger asChild><Button size="sm"><Plus className="mr-1.5 h-3.5 w-3.5" /> Add Service</Button></DialogTrigger>
                     <DialogContent className="max-w-sm">
-                      <DialogHeader><DialogTitle>New Category</DialogTitle></DialogHeader>
-                      <div className="space-y-3 mt-2">
-                        <div><Label>Name</Label><Input value={catForm.name} onChange={e => setCatForm({...catForm, name: e.target.value})} placeholder="e.g. Pest Control" className="mt-1" /></div>
+                      <DialogHeader><DialogTitle>New Service</DialogTitle></DialogHeader>
+                      <div className="mt-2 space-y-3">
+                        <div><Label>Name</Label><Input value={svcForm.name} onChange={(e) => setSvcForm({ ...svcForm, name: e.target.value })} placeholder="e.g. Pet Care" className="mt-1" /></div>
+                        <div><Label>Slug</Label><Input value={svcForm.slug} onChange={(e) => setSvcForm({ ...svcForm, slug: e.target.value })} placeholder="pet-care" className="mt-1" /></div>
+                        <div><Label>Tagline</Label><Input value={svcForm.tagline} onChange={(e) => setSvcForm({ ...svcForm, tagline: e.target.value })} className="mt-1" /></div>
                         <div className="grid grid-cols-2 gap-3">
-                          <div><Label>Base price (₹)</Label><Input type="number" value={catForm.base_price} onChange={e => setCatForm({...catForm, base_price: e.target.value})} className="mt-1" /></div>
-                          <div><Label>Commission %</Label><Input type="number" value={catForm.commission_pct} onChange={e => setCatForm({...catForm, commission_pct: e.target.value})} className="mt-1" /></div>
+                          <div><Label>Rate/hr (₹)</Label><Input type="number" value={svcForm.rate_per_hour} onChange={(e) => setSvcForm({ ...svcForm, rate_per_hour: e.target.value })} className="mt-1" /></div>
+                          <div><Label>Icon</Label>
+                            <Select value={svcForm.icon_name} onValueChange={(v) => setSvcForm({ ...svcForm, icon_name: v })}>
+                              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                              <SelectContent>{["Sparkles","Utensils","CookingPot","ShowerHead","Shirt","ChefHat","Brush","WashingMachine"].map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent>
+                            </Select>
+                          </div>
                         </div>
-                        <div><Label>Icon name</Label>
-                          <Select value={catForm.icon_name} onValueChange={v => setCatForm({...catForm, icon_name: v})}>
-                            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              {["Sparkles","Wrench","Zap","Hammer","PaintBucket","AirVent","Scissors","Home"].map(n => (
-                                <SelectItem key={n} value={n}>{n}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <Button className="w-full mt-2" disabled={createCategory.isPending} onClick={() => {
-                          if (!catForm.name) { toast.error("Name is required"); return; }
-                          createCategory.mutate({ name: catForm.name, base_price: Number(catForm.base_price)||0, commission_pct: Number(catForm.commission_pct)||15, icon_name: catForm.icon_name||"Sparkles" });
-                        }}>
-                          {createCategory.isPending ? "Creating…" : "Create Category"}
-                        </Button>
+                        <Button className="mt-2 w-full" disabled={createService.isPending} onClick={() => {
+                          if (!svcForm.name || !svcForm.slug || !svcForm.rate_per_hour) { toast.error("Name, slug and rate are required"); return; }
+                          createService.mutate({ name: svcForm.name, slug: svcForm.slug, tagline: svcForm.tagline, rate_per_hour: Number(svcForm.rate_per_hour), icon_name: svcForm.icon_name });
+                        }}>{createService.isPending ? "Creating…" : "Create Service"}</Button>
                       </div>
                     </DialogContent>
                   </Dialog>
-                }
-              />
+                } />
               <div className="overflow-hidden rounded-2xl border bg-card">
                 <table className="w-full text-sm">
                   <thead className="bg-muted/30 text-xs font-medium text-muted-foreground">
-                    <tr>
-                      <th className="px-5 py-3.5 text-left">Category</th>
-                      <th className="px-5 py-3.5 text-left">Base Price</th>
-                      <th className="px-5 py-3.5 text-left">Commission</th>
-                      <th className="px-5 py-3.5 text-left">Status</th>
-                      <th className="px-5 py-3.5 text-right">Action</th>
-                    </tr>
+                    <tr><th className="px-5 py-3.5 text-left">Service</th><th className="px-5 py-3.5 text-left">Rate/hr</th><th className="px-5 py-3.5 text-left">Status</th><th className="px-5 py-3.5 text-right">Action</th></tr>
                   </thead>
                   <tbody>
-                    {(data?.categories ?? []).length === 0 ? (
-                      <tr><td colSpan={5} className="py-12 text-center text-muted-foreground">No categories yet</td></tr>
-                    ) : (data?.categories ?? []).map((c: any) => (
-                      <tr key={c.id} className="border-t hover:bg-muted/20 transition-colors">
-                        <td className="px-5 py-3 font-medium">{c.name}</td>
-                        <td className="px-5 py-3 font-semibold">₹{Number(c.base_price).toLocaleString('en-IN')}</td>
-                        <td className="px-5 py-3 text-muted-foreground">{c.commission_pct}%</td>
-                        <td className="px-5 py-3">
-                          {c.is_active
-                            ? <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600"><Circle className="h-2 w-2 fill-emerald-500 text-emerald-500" />Active</span>
-                            : <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground"><Circle className="h-2 w-2 fill-slate-300 text-slate-300" />Disabled</span>}
-                        </td>
-                        <td className="px-5 py-3 text-right">
-                          <Button size="sm" variant="outline" className="h-7 text-xs"
-                            onClick={() => toggleCategory.mutate({ id: c.id, is_active: !c.is_active })}>
-                            {c.is_active ? "Disable" : "Enable"}
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
+                    {(data?.services ?? []).length === 0 ? <tr><td colSpan={4} className="py-12 text-center text-muted-foreground">No services</td></tr> :
+                      (data?.services ?? []).map((s: any) => (
+                        <tr key={s.id} className="border-t hover:bg-muted/20">
+                          <td className="px-5 py-3"><div className="font-medium">{s.name}</div><div className="text-xs text-muted-foreground">{s.tagline}</div></td>
+                          <td className="px-5 py-3 font-semibold">₹{Number(s.rate_per_hour).toLocaleString("en-IN")}</td>
+                          <td className="px-5 py-3">{s.is_active ? <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600"><Circle className="h-2 w-2 fill-emerald-500 text-emerald-500" />Active</span> : <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground"><Circle className="h-2 w-2 fill-slate-300 text-slate-300" />Disabled</span>}</td>
+                          <td className="px-5 py-3 text-right"><Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => toggleService.mutate({ id: s.id, is_active: !s.is_active })}>{s.is_active ? "Disable" : "Enable"}</Button></td>
+                        </tr>
+                      ))}
                   </tbody>
                 </table>
               </div>
             </div>
           )}
 
-          {/* ── COUPONS ──────────────────────────────────────────────────── */}
           {section === "coupons" && (
             <div>
               <SectionHead title="Coupons" desc="Discount codes and promotions"
                 action={
                   <Dialog open={couponOpen} onOpenChange={setCouponOpen}>
-                    <DialogTrigger asChild>
-                      <Button size="sm"><Plus className="mr-1.5 h-3.5 w-3.5" /> New Coupon</Button>
-                    </DialogTrigger>
+                    <DialogTrigger asChild><Button size="sm"><Plus className="mr-1.5 h-3.5 w-3.5" /> New Coupon</Button></DialogTrigger>
                     <DialogContent className="max-w-sm">
                       <DialogHeader><DialogTitle>Create Coupon</DialogTitle></DialogHeader>
-                      <div className="space-y-3 mt-2">
-                        <div><Label>Code</Label><Input value={couponForm.code} onChange={e => setCouponForm({...couponForm, code: e.target.value.toUpperCase()})} placeholder="e.g. SAVE20" className="mt-1 font-mono tracking-widest" /></div>
+                      <div className="mt-2 space-y-3">
+                        <div><Label>Code</Label><Input value={couponForm.code} onChange={(e) => setCouponForm({ ...couponForm, code: e.target.value.toUpperCase() })} placeholder="SAVE20" className="mt-1 font-mono tracking-widest" /></div>
                         <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <Label>Type</Label>
-                            <Select value={couponForm.type} onValueChange={v => setCouponForm({...couponForm, type: v})}>
+                          <div><Label>Type</Label>
+                            <Select value={couponForm.type} onValueChange={(v) => setCouponForm({ ...couponForm, type: v })}>
                               <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="FLAT">Flat (₹)</SelectItem>
-                                <SelectItem value="PERCENT">Percent (%)</SelectItem>
-                              </SelectContent>
+                              <SelectContent><SelectItem value="FLAT">Flat (₹)</SelectItem><SelectItem value="PERCENT">Percent (%)</SelectItem></SelectContent>
                             </Select>
                           </div>
-                          <div><Label>Value</Label><Input type="number" value={couponForm.value} onChange={e => setCouponForm({...couponForm, value: e.target.value})} className="mt-1" /></div>
+                          <div><Label>Value</Label><Input type="number" value={couponForm.value} onChange={(e) => setCouponForm({ ...couponForm, value: e.target.value })} className="mt-1" /></div>
                         </div>
-                        <div><Label>Max uses <span className="text-muted-foreground">(optional)</span></Label><Input type="number" value={couponForm.max_uses} onChange={e => setCouponForm({...couponForm, max_uses: e.target.value})} className="mt-1" /></div>
-                        <Button className="w-full mt-2" disabled={createCoupon.isPending} onClick={() => {
+                        <div><Label>Max uses (optional)</Label><Input type="number" value={couponForm.max_uses} onChange={(e) => setCouponForm({ ...couponForm, max_uses: e.target.value })} className="mt-1" /></div>
+                        <Button className="mt-2 w-full" disabled={createCoupon.isPending} onClick={() => {
                           if (!couponForm.code || !couponForm.value) { toast.error("Code and value are required"); return; }
                           createCoupon.mutate({ code: couponForm.code, type: couponForm.type, value: Number(couponForm.value), max_uses: couponForm.max_uses ? Number(couponForm.max_uses) : undefined });
-                        }}>
-                          {createCoupon.isPending ? "Creating…" : "Create Coupon"}
-                        </Button>
+                        }}>{createCoupon.isPending ? "Creating…" : "Create Coupon"}</Button>
                       </div>
                     </DialogContent>
                   </Dialog>
-                }
-              />
+                } />
               {(data?.coupons ?? []).length === 0 ? (
-                <div className="flex flex-col items-center py-16 rounded-2xl border bg-muted/20 gap-2">
-                  <Ticket className="h-8 w-8 text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">No coupons yet. Create your first one.</p>
-                </div>
+                <div className="flex flex-col items-center gap-2 rounded-2xl border bg-muted/20 py-16"><Ticket className="h-8 w-8 text-muted-foreground" /><p className="text-sm text-muted-foreground">No coupons yet.</p></div>
               ) : (
                 <div className="overflow-hidden rounded-2xl border bg-card">
                   <table className="w-full text-sm">
                     <thead className="bg-muted/30 text-xs font-medium text-muted-foreground">
-                      <tr>
-                        <th className="px-5 py-3.5 text-left">Code</th>
-                        <th className="px-5 py-3.5 text-left">Discount</th>
-                        <th className="px-5 py-3.5 text-left">Usage</th>
-                        <th className="px-5 py-3.5 text-left">Status</th>
-                        <th className="px-5 py-3.5 text-right">Action</th>
-                      </tr>
+                      <tr><th className="px-5 py-3.5 text-left">Code</th><th className="px-5 py-3.5 text-left">Discount</th><th className="px-5 py-3.5 text-left">Usage</th><th className="px-5 py-3.5 text-left">Status</th><th className="px-5 py-3.5 text-right">Action</th></tr>
                     </thead>
                     <tbody>
                       {data!.coupons.map((c: any) => (
-                        <tr key={c.id} className="border-t hover:bg-muted/20 transition-colors">
-                          <td className="px-5 py-3 font-mono font-semibold tracking-widest text-xs">{c.code}</td>
-                          <td className="px-5 py-3 font-semibold">
-                            {c.type === "PERCENT" ? `${c.value}% off` : `₹${Number(c.value).toLocaleString('en-IN')} off`}
-                          </td>
-                          <td className="px-5 py-3">
-                            <div className="flex items-center gap-2">
-                              <span className="text-muted-foreground">{c.used_count}</span>
-                              {c.max_uses && (
-                                <>
-                                  <span className="text-muted-foreground">/ {c.max_uses}</span>
-                                  <div className="h-1.5 w-16 rounded-full bg-muted overflow-hidden">
-                                    <div className="h-full bg-primary rounded-full" style={{ width: `${Math.min(100, (c.used_count / c.max_uses) * 100)}%` }} />
-                                  </div>
-                                </>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-5 py-3">
-                            {c.is_active
-                              ? <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600"><Circle className="h-2 w-2 fill-emerald-500 text-emerald-500" />Active</span>
-                              : <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground"><Circle className="h-2 w-2 fill-slate-300 text-slate-300" />Inactive</span>}
-                          </td>
+                        <tr key={c.id} className="border-t hover:bg-muted/20">
+                          <td className="px-5 py-3 font-mono text-xs font-semibold tracking-widest">{c.code}</td>
+                          <td className="px-5 py-3 font-semibold">{c.type === "PERCENT" ? `${c.value}% off` : `₹${Number(c.value).toLocaleString("en-IN")} off`}</td>
+                          <td className="px-5 py-3 text-muted-foreground">{c.used_count}{c.max_uses ? ` / ${c.max_uses}` : ""}</td>
+                          <td className="px-5 py-3">{c.is_active ? <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600"><Circle className="h-2 w-2 fill-emerald-500 text-emerald-500" />Active</span> : <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground"><Circle className="h-2 w-2 fill-slate-300 text-slate-300" />Inactive</span>}</td>
+                          <td className="px-5 py-3 text-right"><Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => toggleCoupon.mutate({ id: c.id, is_active: !c.is_active })}>{c.is_active ? "Disable" : "Enable"}</Button></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {section === "settlements" && (
+            <div>
+              <SectionHead title="Settlements" desc="Expert withdrawal requests"
+                action={<Button variant="outline" size="sm" onClick={() => qc.invalidateQueries({ queryKey: ["admin-withdrawals"] })}><RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Refresh</Button>} />
+              {wdLoading ? <div className="flex h-40 items-center justify-center"><LoadingSpinner /></div> : (withdrawals as any[]).length === 0 ? (
+                <div className="flex flex-col items-center gap-2 rounded-2xl border bg-muted/20 py-16"><Wallet className="h-8 w-8 text-muted-foreground" /><p className="text-sm text-muted-foreground">No withdrawal requests.</p></div>
+              ) : (
+                <div className="overflow-hidden rounded-2xl border bg-card">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/30 text-xs font-medium text-muted-foreground">
+                      <tr><th className="px-5 py-3.5 text-left">Expert</th><th className="px-5 py-3.5 text-left">Amount</th><th className="px-5 py-3.5 text-left">Bank</th><th className="px-5 py-3.5 text-left">Status</th><th className="px-5 py-3.5 text-right">Action</th></tr>
+                    </thead>
+                    <tbody>
+                      {(withdrawals as any[]).map((w) => (
+                        <tr key={w.id} className="border-t hover:bg-muted/20">
+                          <td className="px-5 py-3 font-medium">{w.expert_name ?? w.expert_id}</td>
+                          <td className="px-5 py-3 font-semibold">₹{Number(w.amount).toLocaleString("en-IN")}</td>
+                          <td className="px-5 py-3 text-xs text-muted-foreground">{w.bank_account ?? "—"}{w.bank_ifsc ? ` · ${w.bank_ifsc}` : ""}</td>
+                          <td className="px-5 py-3"><span className={cn("rounded-full px-2.5 py-0.5 text-[10px] font-semibold", STATUS_PILL[w.status] ?? "bg-slate-100 text-slate-600")}>{w.status}</span></td>
                           <td className="px-5 py-3 text-right">
-                            <Button variant="outline" size="sm" className="h-7 text-xs"
-                              onClick={() => toggleCoupon.mutate({ id: c.id, is_active: !c.is_active })}>
-                              {c.is_active ? "Disable" : "Enable"}
-                            </Button>
+                            {["REQUESTED", "APPROVED"].includes(w.status) ? (
+                              <div className="flex justify-end gap-1.5">
+                                <Button size="sm" variant="outline" className="h-7 border-red-200 text-red-600 hover:bg-red-50" onClick={() => actWithdrawal.mutate({ id: w.id, action: "reject" })}>Reject</Button>
+                                <Button size="sm" className="h-7 bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => actWithdrawal.mutate({ id: w.id, action: "pay" })}>Mark paid</Button>
+                              </div>
+                            ) : <span className="text-xs text-muted-foreground">Settled</span>}
                           </td>
                         </tr>
                       ))}
@@ -831,6 +872,159 @@ function AdminDashboard() {
                   </table>
                 </div>
               )}
+            </div>
+          )}
+
+          {section === "support" && (
+            <div>
+              {openTicket && ticketThread ? (
+                <div className="max-w-2xl">
+                  <button onClick={() => setOpenTicket(null)} className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" /> All tickets</button>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div><h2 className="text-xl font-semibold">{ticketThread.subject}</h2><p className="text-xs text-muted-foreground">{ticketThread.user_name}</p></div>
+                    <div className="flex gap-1.5">
+                      {["IN_PROGRESS", "RESOLVED", "CLOSED"].map((s) => (
+                        <Button key={s} size="sm" variant="outline" className="h-7 text-xs" onClick={() => ticketStatus.mutate(s)}>{s.replace("_", " ")}</Button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="mt-5 space-y-3">
+                    {(ticketThread.messages ?? []).map((m: any) => (
+                      <div key={m.id} className={cn("flex", m.is_staff ? "justify-end" : "justify-start")}>
+                        <div className={cn("max-w-[80%] rounded-2xl px-4 py-2.5 text-sm", m.is_staff ? "bg-primary text-primary-foreground" : "bg-muted")}>
+                          <div className="mb-0.5 text-[10px] opacity-70">{m.is_staff ? "Support" : m.sender_name ?? "Customer"}</div>
+                          {m.body}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-5 flex gap-2">
+                    <Input value={reply} onChange={(e) => setReply(e.target.value)} placeholder="Reply to customer…" onKeyDown={(e) => { if (e.key === "Enter" && reply.trim()) ticketReply.mutate(); }} />
+                    <Button disabled={ticketReply.isPending || !reply.trim()} onClick={() => ticketReply.mutate()}><Send className="h-4 w-4" /></Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <SectionHead title="Support tickets" desc="Customer & expert queries" />
+                  {ticketsLoading ? <div className="flex h-40 items-center justify-center"><LoadingSpinner /></div> : (tickets as any[]).length === 0 ? (
+                    <div className="flex flex-col items-center gap-2 rounded-2xl border bg-muted/20 py-16"><LifeBuoy className="h-8 w-8 text-muted-foreground" /><p className="text-sm text-muted-foreground">No tickets.</p></div>
+                  ) : (
+                    <div className="space-y-2">
+                      {(tickets as any[]).map((t) => (
+                        <button key={t.id} onClick={() => setOpenTicket(t.id)} className="flex w-full items-center justify-between rounded-2xl border bg-card p-4 text-left hover:border-primary/40">
+                          <div className="min-w-0"><div className="truncate font-medium">{t.subject}</div><div className="text-xs text-muted-foreground">{t.user_name} · {t.message_count} msg</div></div>
+                          <span className={cn("shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-semibold", STATUS_PILL[t.status] ?? "bg-slate-100 text-slate-600")}>{t.status}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {section === "settings" && (
+            <div className="space-y-8">
+              <div>
+                <SectionHead title="Platform settings" desc="Configuration & CMS" />
+                {settingsLoading ? <div className="flex h-32 items-center justify-center"><LoadingSpinner /></div> : (
+                  <div className="overflow-hidden rounded-2xl border bg-card">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/30 text-xs font-medium text-muted-foreground"><tr><th className="px-5 py-3 text-left">Key</th><th className="px-5 py-3 text-left">Value</th><th className="px-5 py-3 text-left">Public</th><th className="px-5 py-3 text-right">Save</th></tr></thead>
+                      <tbody>
+                        {(settings as any[]).map((s) => (
+                          <tr key={s.setting_key} className="border-t">
+                            <td className="px-5 py-3 font-mono text-xs">{s.setting_key}</td>
+                            <td className="px-5 py-3"><Input className="h-8" defaultValue={s.setting_value} onChange={(e) => setSettingEdits({ ...settingEdits, [s.setting_key]: e.target.value })} /></td>
+                            <td className="px-5 py-3">{s.is_public ? "Yes" : "No"}</td>
+                            <td className="px-5 py-3 text-right"><Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => saveSetting.mutate({ key: s.setting_key, value: settingEdits[s.setting_key] ?? s.setting_value, is_public: Boolean(s.is_public) })}>Save</Button></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <SectionHead title="Cities" desc="Where the platform operates" />
+                <div className="mb-3 flex gap-2"><Input className="max-w-xs" value={newCity} onChange={(e) => setNewCity(e.target.value)} placeholder="Add a city…" /><Button onClick={() => newCity.trim() && addCity.mutate(newCity.trim())}><Plus className="mr-1 h-4 w-4" /> Add</Button></div>
+                <div className="flex flex-wrap gap-2">
+                  {(cities as any[]).map((c) => (
+                    <button key={c.id} onClick={() => toggleCity.mutate({ id: c.id, is_active: !c.is_active })}
+                      className={cn("rounded-full border px-3 py-1.5 text-sm font-medium transition-colors", c.is_active ? "border-primary/40 bg-primary/5 text-primary" : "border-border text-muted-foreground line-through")}>
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <SectionHead title="Homepage banners" desc="Shown on the landing page" />
+                <div className="mb-3 grid gap-2 sm:grid-cols-[1fr_2fr_auto]">
+                  <Input value={banner.title} onChange={(e) => setBanner({ ...banner, title: e.target.value })} placeholder="Title" />
+                  <Input value={banner.image_url} onChange={(e) => setBanner({ ...banner, image_url: e.target.value })} placeholder="Image URL" />
+                  <Button onClick={() => { if (!banner.title || !banner.image_url) { toast.error("Title and image URL required"); return; } createBanner.mutate(); }}><Plus className="mr-1 h-4 w-4" /> Add</Button>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {(banners as any[]).map((b) => (
+                    <div key={b.id} className="flex items-center gap-3 rounded-xl border bg-card p-2">
+                      <img src={b.image_url} alt="" className="h-12 w-16 rounded-lg object-cover" />
+                      <div className="min-w-0 flex-1"><div className="truncate text-sm font-medium">{b.title}</div></div>
+                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => toggleBanner.mutate({ id: b.id, is_active: !b.is_active })}>{b.is_active ? "Hide" : "Show"}</Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <SectionHead title="CMS pages" desc="Terms, privacy & more" />
+                <div className="flex gap-1">
+                  {["terms", "privacy"].map((s) => (
+                    <button key={s} onClick={() => setPageSlug(s)} className={cn("rounded-lg border px-3 py-1.5 text-xs font-medium capitalize", pageSlug === s ? "border-primary bg-primary/5 text-primary" : "border-border")}>{s}</button>
+                  ))}
+                </div>
+                <div className="mt-3 space-y-2 rounded-2xl border bg-card p-4">
+                  <Input value={pageForm.title} onChange={(e) => setPageForm({ ...pageForm, title: e.target.value })} placeholder="Page title" />
+                  <Textarea rows={6} value={pageForm.body} onChange={(e) => setPageForm({ ...pageForm, body: e.target.value })} placeholder="Page content" />
+                  <Button onClick={() => savePage.mutate()} disabled={savePage.isPending}>{savePage.isPending ? "Saving…" : "Save page"}</Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {section === "admins" && (
+            <div>
+              <SectionHead title="Admin management" desc="Promote users to admin or revoke access" />
+              <div className="mb-4 flex gap-2">
+                <Input className="max-w-sm" value={promoteEmail} onChange={(e) => setPromoteEmail(e.target.value)} placeholder="user@email.com" />
+                <Button onClick={() => promoteEmail.trim() && promote.mutate({ email: promoteEmail.trim(), role: "ADMIN" })}>
+                  <Plus className="mr-1 h-4 w-4" /> Make admin
+                </Button>
+              </div>
+              <div className="overflow-hidden rounded-2xl border bg-card">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/30 text-xs font-medium text-muted-foreground">
+                    <tr><th className="px-5 py-3 text-left">User</th><th className="px-5 py-3 text-left">Role</th><th className="px-5 py-3 text-right">Action</th></tr>
+                  </thead>
+                  <tbody>
+                    {(admins as any[]).map((a) => (
+                      <tr key={a.id} className="border-t">
+                        <td className="px-5 py-3"><div className="font-medium">{a.name ?? "—"}</div><div className="text-xs text-muted-foreground">{a.email}</div></td>
+                        <td className="px-5 py-3"><span className={cn("rounded-full px-2.5 py-0.5 text-[10px] font-semibold", a.role === "SUPER_ADMIN" ? "bg-violet-100 text-violet-700" : "bg-blue-100 text-blue-700")}>{a.role}</span></td>
+                        <td className="px-5 py-3 text-right">
+                          {a.id !== user?.id && a.role !== "SUPER_ADMIN" && (
+                            <div className="flex justify-end gap-1.5">
+                              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => promote.mutate({ user_id: a.id, role: "CUSTOMER" })}>Revoke</Button>
+                              <Button size="sm" className="h-7 text-xs" onClick={() => promote.mutate({ user_id: a.id, role: "SUPER_ADMIN" })}>Make super</Button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 

@@ -28,11 +28,7 @@ async function runSqlFile(filePath) {
 
 const schemaFile = path.resolve(process.cwd(), 'server/schema.sql');
 await runSqlFile(schemaFile);
-console.log('MySQL base schema migration completed.');
-
-const migration001 = path.resolve(process.cwd(), 'server/migrations/001_new_tables.sql');
-await runSqlFile(migration001);
-console.log('Migration 001 (new tables) completed.');
+console.log('Snabbit schema migration completed.');
 
 console.log('All migrations completed successfully.');
 await pool.end();

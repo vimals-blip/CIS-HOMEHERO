@@ -9,20 +9,38 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as WalletRouteImport } from './routes/wallet'
+import { Route as SupportRouteImport } from './routes/support'
 import { Route as BookingsRouteImport } from './routes/bookings'
+import { Route as AccountRouteImport } from './routes/account'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as ProviderIndexRouteImport } from './routes/provider.index'
+import { Route as ExpertIndexRouteImport } from './routes/expert.index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
-import { Route as ProvidersProviderIdRouteImport } from './routes/providers.$providerId'
-import { Route as ProviderJobsRouteImport } from './routes/provider.jobs'
-import { Route as BookCategoryIdRouteImport } from './routes/book.$categoryId'
-import { Route as AuthSignupProviderRouteImport } from './routes/auth.signup-provider'
+import { Route as TrackBookingIdRouteImport } from './routes/track.$bookingId'
+import { Route as PSlugRouteImport } from './routes/p.$slug'
+import { Route as BookServiceIdRouteImport } from './routes/book.$serviceId'
+import { Route as AuthSignupExpertRouteImport } from './routes/auth.signup-expert'
 import { Route as AuthSignupCustomerRouteImport } from './routes/auth.signup-customer'
 import { Route as AuthLoginRouteImport } from './routes/auth.login'
 
+const WalletRoute = WalletRouteImport.update({
+  id: '/wallet',
+  path: '/wallet',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SupportRoute = SupportRouteImport.update({
+  id: '/support',
+  path: '/support',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BookingsRoute = BookingsRouteImport.update({
   id: '/bookings',
   path: '/bookings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AccountRoute = AccountRouteImport.update({
+  id: '/account',
+  path: '/account',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -30,9 +48,9 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ProviderIndexRoute = ProviderIndexRouteImport.update({
-  id: '/provider/',
-  path: '/provider/',
+const ExpertIndexRoute = ExpertIndexRouteImport.update({
+  id: '/expert/',
+  path: '/expert/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
@@ -40,24 +58,24 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
   path: '/admin/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ProvidersProviderIdRoute = ProvidersProviderIdRouteImport.update({
-  id: '/providers/$providerId',
-  path: '/providers/$providerId',
+const TrackBookingIdRoute = TrackBookingIdRouteImport.update({
+  id: '/track/$bookingId',
+  path: '/track/$bookingId',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ProviderJobsRoute = ProviderJobsRouteImport.update({
-  id: '/provider/jobs',
-  path: '/provider/jobs',
+const PSlugRoute = PSlugRouteImport.update({
+  id: '/p/$slug',
+  path: '/p/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
-const BookCategoryIdRoute = BookCategoryIdRouteImport.update({
-  id: '/book/$categoryId',
-  path: '/book/$categoryId',
+const BookServiceIdRoute = BookServiceIdRouteImport.update({
+  id: '/book/$serviceId',
+  path: '/book/$serviceId',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthSignupProviderRoute = AuthSignupProviderRouteImport.update({
-  id: '/auth/signup-provider',
-  path: '/auth/signup-provider',
+const AuthSignupExpertRoute = AuthSignupExpertRouteImport.update({
+  id: '/auth/signup-expert',
+  path: '/auth/signup-expert',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthSignupCustomerRoute = AuthSignupCustomerRouteImport.update({
@@ -73,100 +91,142 @@ const AuthLoginRoute = AuthLoginRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/account': typeof AccountRoute
   '/bookings': typeof BookingsRoute
+  '/support': typeof SupportRoute
+  '/wallet': typeof WalletRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup-customer': typeof AuthSignupCustomerRoute
-  '/auth/signup-provider': typeof AuthSignupProviderRoute
-  '/book/$categoryId': typeof BookCategoryIdRoute
-  '/provider/jobs': typeof ProviderJobsRoute
-  '/providers/$providerId': typeof ProvidersProviderIdRoute
+  '/auth/signup-expert': typeof AuthSignupExpertRoute
+  '/book/$serviceId': typeof BookServiceIdRoute
+  '/p/$slug': typeof PSlugRoute
+  '/track/$bookingId': typeof TrackBookingIdRoute
   '/admin/': typeof AdminIndexRoute
-  '/provider/': typeof ProviderIndexRoute
+  '/expert/': typeof ExpertIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/account': typeof AccountRoute
   '/bookings': typeof BookingsRoute
+  '/support': typeof SupportRoute
+  '/wallet': typeof WalletRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup-customer': typeof AuthSignupCustomerRoute
-  '/auth/signup-provider': typeof AuthSignupProviderRoute
-  '/book/$categoryId': typeof BookCategoryIdRoute
-  '/provider/jobs': typeof ProviderJobsRoute
-  '/providers/$providerId': typeof ProvidersProviderIdRoute
+  '/auth/signup-expert': typeof AuthSignupExpertRoute
+  '/book/$serviceId': typeof BookServiceIdRoute
+  '/p/$slug': typeof PSlugRoute
+  '/track/$bookingId': typeof TrackBookingIdRoute
   '/admin': typeof AdminIndexRoute
-  '/provider': typeof ProviderIndexRoute
+  '/expert': typeof ExpertIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/account': typeof AccountRoute
   '/bookings': typeof BookingsRoute
+  '/support': typeof SupportRoute
+  '/wallet': typeof WalletRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup-customer': typeof AuthSignupCustomerRoute
-  '/auth/signup-provider': typeof AuthSignupProviderRoute
-  '/book/$categoryId': typeof BookCategoryIdRoute
-  '/provider/jobs': typeof ProviderJobsRoute
-  '/providers/$providerId': typeof ProvidersProviderIdRoute
+  '/auth/signup-expert': typeof AuthSignupExpertRoute
+  '/book/$serviceId': typeof BookServiceIdRoute
+  '/p/$slug': typeof PSlugRoute
+  '/track/$bookingId': typeof TrackBookingIdRoute
   '/admin/': typeof AdminIndexRoute
-  '/provider/': typeof ProviderIndexRoute
+  '/expert/': typeof ExpertIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/account'
     | '/bookings'
+    | '/support'
+    | '/wallet'
     | '/auth/login'
     | '/auth/signup-customer'
-    | '/auth/signup-provider'
-    | '/book/$categoryId'
-    | '/provider/jobs'
-    | '/providers/$providerId'
+    | '/auth/signup-expert'
+    | '/book/$serviceId'
+    | '/p/$slug'
+    | '/track/$bookingId'
     | '/admin/'
-    | '/provider/'
+    | '/expert/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/account'
     | '/bookings'
+    | '/support'
+    | '/wallet'
     | '/auth/login'
     | '/auth/signup-customer'
-    | '/auth/signup-provider'
-    | '/book/$categoryId'
-    | '/provider/jobs'
-    | '/providers/$providerId'
+    | '/auth/signup-expert'
+    | '/book/$serviceId'
+    | '/p/$slug'
+    | '/track/$bookingId'
     | '/admin'
-    | '/provider'
+    | '/expert'
   id:
     | '__root__'
     | '/'
+    | '/account'
     | '/bookings'
+    | '/support'
+    | '/wallet'
     | '/auth/login'
     | '/auth/signup-customer'
-    | '/auth/signup-provider'
-    | '/book/$categoryId'
-    | '/provider/jobs'
-    | '/providers/$providerId'
+    | '/auth/signup-expert'
+    | '/book/$serviceId'
+    | '/p/$slug'
+    | '/track/$bookingId'
     | '/admin/'
-    | '/provider/'
+    | '/expert/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AccountRoute: typeof AccountRoute
   BookingsRoute: typeof BookingsRoute
+  SupportRoute: typeof SupportRoute
+  WalletRoute: typeof WalletRoute
   AuthLoginRoute: typeof AuthLoginRoute
   AuthSignupCustomerRoute: typeof AuthSignupCustomerRoute
-  AuthSignupProviderRoute: typeof AuthSignupProviderRoute
-  BookCategoryIdRoute: typeof BookCategoryIdRoute
-  ProviderJobsRoute: typeof ProviderJobsRoute
-  ProvidersProviderIdRoute: typeof ProvidersProviderIdRoute
+  AuthSignupExpertRoute: typeof AuthSignupExpertRoute
+  BookServiceIdRoute: typeof BookServiceIdRoute
+  PSlugRoute: typeof PSlugRoute
+  TrackBookingIdRoute: typeof TrackBookingIdRoute
   AdminIndexRoute: typeof AdminIndexRoute
-  ProviderIndexRoute: typeof ProviderIndexRoute
+  ExpertIndexRoute: typeof ExpertIndexRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/wallet': {
+      id: '/wallet'
+      path: '/wallet'
+      fullPath: '/wallet'
+      preLoaderRoute: typeof WalletRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/support': {
+      id: '/support'
+      path: '/support'
+      fullPath: '/support'
+      preLoaderRoute: typeof SupportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/bookings': {
       id: '/bookings'
       path: '/bookings'
       fullPath: '/bookings'
       preLoaderRoute: typeof BookingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/account': {
+      id: '/account'
+      path: '/account'
+      fullPath: '/account'
+      preLoaderRoute: typeof AccountRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -176,11 +236,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/provider/': {
-      id: '/provider/'
-      path: '/provider'
-      fullPath: '/provider/'
-      preLoaderRoute: typeof ProviderIndexRouteImport
+    '/expert/': {
+      id: '/expert/'
+      path: '/expert'
+      fullPath: '/expert/'
+      preLoaderRoute: typeof ExpertIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/': {
@@ -190,32 +250,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/providers/$providerId': {
-      id: '/providers/$providerId'
-      path: '/providers/$providerId'
-      fullPath: '/providers/$providerId'
-      preLoaderRoute: typeof ProvidersProviderIdRouteImport
+    '/track/$bookingId': {
+      id: '/track/$bookingId'
+      path: '/track/$bookingId'
+      fullPath: '/track/$bookingId'
+      preLoaderRoute: typeof TrackBookingIdRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/provider/jobs': {
-      id: '/provider/jobs'
-      path: '/provider/jobs'
-      fullPath: '/provider/jobs'
-      preLoaderRoute: typeof ProviderJobsRouteImport
+    '/p/$slug': {
+      id: '/p/$slug'
+      path: '/p/$slug'
+      fullPath: '/p/$slug'
+      preLoaderRoute: typeof PSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/book/$categoryId': {
-      id: '/book/$categoryId'
-      path: '/book/$categoryId'
-      fullPath: '/book/$categoryId'
-      preLoaderRoute: typeof BookCategoryIdRouteImport
+    '/book/$serviceId': {
+      id: '/book/$serviceId'
+      path: '/book/$serviceId'
+      fullPath: '/book/$serviceId'
+      preLoaderRoute: typeof BookServiceIdRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/auth/signup-provider': {
-      id: '/auth/signup-provider'
-      path: '/auth/signup-provider'
-      fullPath: '/auth/signup-provider'
-      preLoaderRoute: typeof AuthSignupProviderRouteImport
+    '/auth/signup-expert': {
+      id: '/auth/signup-expert'
+      path: '/auth/signup-expert'
+      fullPath: '/auth/signup-expert'
+      preLoaderRoute: typeof AuthSignupExpertRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth/signup-customer': {
@@ -237,15 +297,18 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AccountRoute: AccountRoute,
   BookingsRoute: BookingsRoute,
+  SupportRoute: SupportRoute,
+  WalletRoute: WalletRoute,
   AuthLoginRoute: AuthLoginRoute,
   AuthSignupCustomerRoute: AuthSignupCustomerRoute,
-  AuthSignupProviderRoute: AuthSignupProviderRoute,
-  BookCategoryIdRoute: BookCategoryIdRoute,
-  ProviderJobsRoute: ProviderJobsRoute,
-  ProvidersProviderIdRoute: ProvidersProviderIdRoute,
+  AuthSignupExpertRoute: AuthSignupExpertRoute,
+  BookServiceIdRoute: BookServiceIdRoute,
+  PSlugRoute: PSlugRoute,
+  TrackBookingIdRoute: TrackBookingIdRoute,
   AdminIndexRoute: AdminIndexRoute,
-  ProviderIndexRoute: ProviderIndexRoute,
+  ExpertIndexRoute: ExpertIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -1,17 +1,26 @@
 import dotenv from 'dotenv';
+import http from 'node:http';
 import express from 'express';
 import cors from 'cors';
 import pool from './db.js';
 import { sanitizeBody } from './middleware/sanitize.js';
 import { errorHandler } from './middleware/errorHandler.js';
+import { initRealtime } from './realtime/io.js';
 
 import authRoutes from './routes/auth.js';
-import categoryRoutes from './routes/categories.js';
-import providerRoutes from './routes/providers.js';
+import profileRoutes from './routes/profile.js';
+import serviceRoutes from './routes/services.js';
+import expertRoutes from './routes/experts.js';
+import addressRoutes from './routes/addresses.js';
 import bookingRoutes from './routes/bookings.js';
 import reviewRoutes from './routes/reviews.js';
-import paymentRoutes from './routes/payments.js';
 import walletRoutes from './routes/wallet.js';
+import customerWalletRoutes from './routes/customerWallet.js';
+import couponRoutes from './routes/coupons.js';
+import paymentRoutes from './routes/payments.js';
+import supportRoutes from './routes/support.js';
+import cmsRoutes from './routes/cms.js';
+import notificationRoutes from './routes/notifications.js';
 import adminRoutes from './routes/admin.js';
 
 dotenv.config({ path: new URL('../.env', import.meta.url).pathname });
@@ -46,22 +55,32 @@ app.get(`${BASE}/health`, async (_req, res) => {
 
 // Route modules
 app.use(`${BASE}/auth`, authRoutes);
-app.use(`${BASE}/categories`, categoryRoutes);
-app.use(`${BASE}/providers`, providerRoutes);
-// Singular /provider/:id endpoint (kept for backward compat with frontend)
-app.use(`${BASE}/provider`, providerRoutes);
+app.use(`${BASE}/me`, profileRoutes);
+app.use(`${BASE}/services`, serviceRoutes);
+app.use(`${BASE}/experts`, expertRoutes);
+app.use(`${BASE}/addresses`, addressRoutes);
 app.use(`${BASE}/bookings`, bookingRoutes);
 app.use(`${BASE}/reviews`, reviewRoutes);
+app.use(`${BASE}/expert-wallet`, walletRoutes);
+app.use(`${BASE}/wallet`, customerWalletRoutes);
+app.use(`${BASE}/coupons`, couponRoutes);
 app.use(`${BASE}/payments`, paymentRoutes);
-app.use(`${BASE}/provider-wallet`, walletRoutes);
+app.use(`${BASE}/support`, supportRoutes);
+app.use(`${BASE}/cms`, cmsRoutes);
+app.use(`${BASE}/notifications`, notificationRoutes);
 app.use(`${BASE}/admin`, adminRoutes);
 
 // Global error handler — must be last
 app.use(errorHandler);
 
 const port = Number(process.env.API_PORT || process.env.PORT || 4001);
-app.listen(port, () => {
-  console.log(`HomeHero API listening on http://localhost:${port}${BASE}`);
+
+// Wrap Express in an HTTP server so Socket.IO can share the same port.
+const server = http.createServer(app);
+initRealtime(server);
+
+server.listen(port, () => {
+  console.log(`Snabbit API listening on http://localhost:${port}${BASE}`);
 }).on('error', (error) => {
   if (error?.code === 'EADDRINUSE') {
     console.error(`Port ${port} is already in use. Set API_PORT to another port.`);

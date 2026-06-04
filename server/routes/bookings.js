@@ -5,8 +5,13 @@ import { asyncHandler } from '../utils.js';
 
 const router = Router();
 
-router.get('/',     authMiddleware, asyncHandler(bookingController.list));
-router.post('/',    authMiddleware, asyncHandler(bookingController.create));
-router.patch('/:id', authMiddleware, asyncHandler(bookingController.updateStatus));
+router.use(authMiddleware);
+
+router.get('/',             asyncHandler(bookingController.list));
+router.post('/',            asyncHandler(bookingController.create));
+router.get('/:id',          asyncHandler(bookingController.getOne));
+router.patch('/:id/status', asyncHandler(bookingController.updateStatus));
+router.post('/:id/reject',  asyncHandler(bookingController.reject));
+router.post('/:id/cancel',  asyncHandler(bookingController.cancel));
 
 export default router;

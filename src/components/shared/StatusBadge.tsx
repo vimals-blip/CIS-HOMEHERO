@@ -8,15 +8,30 @@ interface StatusBadgeProps {
 }
 
 const STATUS_CONFIG: Record<string, { label: string; className: string; dot: string }> = {
-  PENDING: {
-    label: "Pending",
+  SEARCHING: {
+    label: "Searching",
     className: "bg-amber-500/12 text-amber-700 ring-1 ring-amber-500/20",
-    dot: "bg-amber-500",
+    dot: "bg-amber-500 animate-pulse",
   },
-  CONFIRMED: {
-    label: "Confirmed",
+  ASSIGNED: {
+    label: "Assigned",
     className: "bg-blue-500/12 text-blue-700 ring-1 ring-blue-500/20",
     dot: "bg-blue-500",
+  },
+  ACCEPTED: {
+    label: "Accepted",
+    className: "bg-blue-500/12 text-blue-700 ring-1 ring-blue-500/20",
+    dot: "bg-blue-500",
+  },
+  ON_THE_WAY: {
+    label: "On the way",
+    className: "bg-indigo-500/12 text-indigo-700 ring-1 ring-indigo-500/20",
+    dot: "bg-indigo-500 animate-pulse",
+  },
+  ARRIVED: {
+    label: "Arrived",
+    className: "bg-cyan-500/12 text-cyan-700 ring-1 ring-cyan-500/20",
+    dot: "bg-cyan-500",
   },
   IN_PROGRESS: {
     label: "In Progress",

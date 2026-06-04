@@ -5,6 +5,9 @@ import { asyncHandler } from '../utils.js';
 
 const router = Router();
 
-router.post('/', authMiddleware, asyncHandler(paymentController.create));
+router.use(authMiddleware);
+
+router.post('/order',  asyncHandler(paymentController.createOrder));
+router.post('/verify', asyncHandler(paymentController.verify));
 
 export default router;

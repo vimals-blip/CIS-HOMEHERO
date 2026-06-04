@@ -1,0 +1,48 @@
+// ── API Gateway ──────────────────────────────────────────────────────────────
+// Single public entry point. Routes each path prefix to the service that owns
+// it; anything not yet extracted falls through to the monolith. This is what
+// lets us migrate to microservices incrementally without downtime.
+import dotenv from 'dotenv';
+import express from 'express';
+import { createProxyMiddleware } from 'http-proxy-middleware';
+
+dotenv.config();
+
+const BASE = process.env.API_BASE_PATH || '/api/v1';
+const PORT = Number(process.env.GATEWAY_PORT || 4000);
+
+const AUTH_SERVICE = process.env.AUTH_SERVICE_URL || 'http://localhost:4101';
+const MONOLITH = process.env.MONOLITH_URL || 'http://localhost:4001';
+
+const app = express();
+
+// Service registry: prefix → target. Order matters (most specific first).
+const ROUTES = [
+  { prefix: `${BASE}/auth`, target: AUTH_SERVICE, name: 'auth-service' },
+  { prefix: `${BASE}/me`,   target: AUTH_SERVICE, name: 'auth-service' },
+];
+
+app.get('/gateway/health', (_req, res) => {
+  res.json({ status: 'ok', gateway: true, routes: ROUTES.map((r) => ({ prefix: r.prefix, service: r.name })), fallback: MONOLITH });
+});
+
+for (const { prefix, target } of ROUTES) {
+  app.use(prefix, createProxyMiddleware({ target, changeOrigin: true, pathRewrite: (p, req) => req.originalUrl }));
+}
+
+// Fallback: everything else (booking, payments, services, realtime ws…) → monolith.
+const fallback = createProxyMiddleware({
+  target: MONOLITH,
+  changeOrigin: true,
+  ws: true, // proxy Socket.IO websocket upgrades
+  pathRewrite: (p, req) => req.originalUrl,
+});
+app.use('/', fallback);
+
+const server = app.listen(PORT, () => {
+  console.log(`API Gateway on http://localhost:${PORT}`);
+  console.log(`  ${BASE}/auth, ${BASE}/me  → ${AUTH_SERVICE}`);
+  console.log(`  everything else (+ws)     → ${MONOLITH}`);
+});
+// Forward websocket upgrades to the monolith (Socket.IO).
+server.on('upgrade', fallback.upgrade);

@@ -2,15 +2,15 @@ import crypto from 'node:crypto';
 import pool from '../db.js';
 
 export const ReviewModel = {
-  async findByProvider(providerId) {
+  async findByExpert(expertId) {
     const [rows] = await pool.query(
-      `SELECT r.id, r.rating, r.comment, r.provider_reply, r.created_at, p.name AS customer_name
+      `SELECT r.id, r.rating, r.comment, r.created_at, p.name AS customer_name
        FROM reviews r
        LEFT JOIN profiles p ON p.id = r.customer_id
-       WHERE r.provider_id = ? AND r.is_flagged = 0
+       WHERE r.expert_id = ?
        ORDER BY r.created_at DESC
        LIMIT 50`,
-      [providerId],
+      [expertId],
     );
     return rows ?? [];
   },
@@ -20,24 +20,12 @@ export const ReviewModel = {
     return rows[0] ?? null;
   },
 
-  async create({ bookingId, providerId, customerId, rating, comment }) {
+  async create({ bookingId, expertId, customerId, rating, comment }) {
     const id = `review-${crypto.randomUUID()}`;
     await pool.query(
-      'INSERT INTO reviews (id, booking_id, provider_id, customer_id, rating, comment, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())',
-      [id, bookingId, providerId, customerId, rating, comment ?? null],
+      'INSERT INTO reviews (id, booking_id, expert_id, customer_id, rating, comment, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())',
+      [id, bookingId, expertId, customerId, rating, comment ?? null],
     );
     return id;
-  },
-
-  async recalcProviderStats(providerId) {
-    const [[stats]] = await pool.query(
-      'SELECT AVG(rating) AS avg_rating, COUNT(*) AS review_count FROM reviews WHERE provider_id = ? AND is_flagged = 0',
-      [providerId],
-    );
-    await pool.query('UPDATE providers SET avg_rating = ?, review_count = ? WHERE id = ?', [
-      Number(stats.avg_rating ?? 0).toFixed(2),
-      stats.review_count,
-      providerId,
-    ]);
   },
 };

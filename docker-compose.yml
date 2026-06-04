@@ -1,0 +1,60 @@
+# ── HomeHero microservices ───────────────────────────────────────────────────
+# Gateway is the only public port. It routes /auth + /me to auth-service and
+# everything else to the monolith (which still owns booking/payment/dispatch/
+# realtime until those are peeled off next). Shared MySQL + Redis.
+services:
+  mysql:
+    image: mysql:8
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-root}
+      MYSQL_DATABASE: ${DB_NAME:-homehero}
+    ports: ["3306:3306"]
+    volumes: ["mysql_data:/var/lib/mysql"]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+
+  auth-service:
+    build: .
+    command: node services/auth-service/server.js
+    environment:
+      AUTH_SERVICE_PORT: 4101
+      DB_HOST: mysql
+      DB_PASSWORD: ${DB_PASSWORD:-root}
+      DB_NAME: ${DB_NAME:-homehero}
+      JWT_SECRET: ${JWT_SECRET:-change-me}
+    depends_on:
+      mysql: { condition: service_healthy }
+
+  monolith:
+    build: .
+    command: node server/api.js
+    environment:
+      API_PORT: 4001
+      DB_HOST: mysql
+      DB_PASSWORD: ${DB_PASSWORD:-root}
+      DB_NAME: ${DB_NAME:-homehero}
+      JWT_SECRET: ${JWT_SECRET:-change-me}
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      mysql: { condition: service_healthy }
+      redis: { condition: service_started }
+
+  gateway:
+    build: .
+    command: node services/gateway/server.js
+    environment:
+      GATEWAY_PORT: 4000
+      AUTH_SERVICE_URL: http://auth-service:4101
+      MONOLITH_URL: http://monolith:4001
+    ports: ["4000:4000"]
+    depends_on: [auth-service, monolith]
+
+volumes:
+  mysql_data:

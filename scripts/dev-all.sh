@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Bring the whole HomeHero stack up locally: monolith + auth-service + gateway + frontend.
+# Usage: bash scripts/dev-all.sh   (Ctrl-C stops everything)
+set -e
+cd "$(dirname "$0")/.."
+mkdir -p /tmp/homehero-logs
+
+echo "▸ Stopping any previous instances…"
+pkill -f "server/api.js" 2>/dev/null || true
+pkill -f "services/auth-service/server.js" 2>/dev/null || true
+pkill -f "services/gateway/server.js" 2>/dev/null || true
+pkill -f "vite dev" 2>/dev/null || true
+sleep 2
+
+echo "▸ Starting monolith (:4001)…"
+node server/api.js > /tmp/homehero-logs/monolith.log 2>&1 &
+echo "▸ Starting auth-service (:4101)…"
+node services/auth-service/server.js > /tmp/homehero-logs/auth.log 2>&1 &
+sleep 2
+echo "▸ Starting API gateway (:4000)…"
+node services/gateway/server.js > /tmp/homehero-logs/gateway.log 2>&1 &
+sleep 1
+echo "▸ Starting frontend (:8080)…"
+npm run dev > /tmp/homehero-logs/frontend.log 2>&1 &
+
+sleep 5
+echo ""
+echo "──────────────────────────────────────────────"
+for pair in "Gateway:4000/gateway/health" "auth-service:4101/api/v1/health" "monolith:4001/api/v1/health"; do
+  name=${pair%%:*}; url=${pair#*:}
+  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 localhost:$url || echo 000)
+  echo "  $name … HTTP $code"
+done
+echo "  Frontend  … http://localhost:8080"
+echo "──────────────────────────────────────────────"
+echo "Logs: /tmp/homehero-logs/   ·   Ctrl-C to stop all"
+wait
