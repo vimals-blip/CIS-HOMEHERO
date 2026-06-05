@@ -15,19 +15,22 @@ One public domain, terminated by a reverse proxy that splits traffic:
               /api/*, /socket.io/* │           │ everything else
                                    ▼           ▼
                          Gateway (:4000)   Frontend SSR (:4174)
-                          /   \
-              auth-service(:4101)  monolith(:4001)
-                              \        /
+                       /      │      \
+        auth-service(:4101)  │  payment-service(:4102)
+                             ▼
+                       monolith(:4001)
+                              │
                             MySQL  (+ Redis)
 ```
 
-Four Node processes run on the host (all from `backend/`, which holds their
+Five Node processes run on the host (all from `backend/`, which holds their
 dependencies):
 
 | Process | Command (cwd `backend/`) | Port |
 |---------|--------------------------|------|
 | Monolith API | `node server/api.js` | 4001 |
 | Auth service | `node services/auth-service/server.js` | 4101 |
+| Payment service | `node services/payment-service/server.js` | 4102 |
 | Gateway | `node services/gateway/server.js` | 4000 |
 | Frontend SSR | `node server/prod-server.js` (serves `frontend/dist`) | 4174 |
 

@@ -12,14 +12,18 @@ const BASE = process.env.API_BASE_PATH || '/api/v1';
 const PORT = Number(process.env.GATEWAY_PORT || 4000);
 
 const AUTH_SERVICE = process.env.AUTH_SERVICE_URL || 'http://localhost:4101';
+const PAYMENT_SERVICE = process.env.PAYMENT_SERVICE_URL || 'http://localhost:4102';
 const MONOLITH = process.env.MONOLITH_URL || 'http://localhost:4001';
 
 const app = express();
 
 // Service registry: prefix → target. Order matters (most specific first).
 const ROUTES = [
-  { prefix: `${BASE}/auth`, target: AUTH_SERVICE, name: 'auth-service' },
-  { prefix: `${BASE}/me`,   target: AUTH_SERVICE, name: 'auth-service' },
+  { prefix: `${BASE}/auth`,          target: AUTH_SERVICE,    name: 'auth-service' },
+  { prefix: `${BASE}/me`,            target: AUTH_SERVICE,    name: 'auth-service' },
+  { prefix: `${BASE}/payments`,      target: PAYMENT_SERVICE, name: 'payment-service' },
+  { prefix: `${BASE}/expert-wallet`, target: PAYMENT_SERVICE, name: 'payment-service' },
+  { prefix: `${BASE}/wallet`,        target: PAYMENT_SERVICE, name: 'payment-service' },
 ];
 
 app.get('/gateway/health', (_req, res) => {

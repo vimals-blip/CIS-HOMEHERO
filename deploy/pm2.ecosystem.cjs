@@ -11,9 +11,10 @@ const env = { NODE_ENV: 'production' };
 
 module.exports = {
   apps: [
-    { name: 'homehero-monolith',     cwd, script: 'server/api.js',                  env: { ...env, API_PORT: 4001 } },
-    { name: 'homehero-auth-service', cwd, script: 'services/auth-service/server.js', env: { ...env, AUTH_SERVICE_PORT: 4101 } },
-    { name: 'homehero-gateway',      cwd, script: 'services/gateway/server.js',      env: { ...env, GATEWAY_PORT: 4000 } },
-    { name: 'homehero-frontend',     cwd, script: 'server/prod-server.js',           env: { ...env, PORT: 4174 } },
+    { name: 'homehero-monolith',        cwd, script: 'server/api.js',                     env: { ...env, API_PORT: 4001 } },
+    { name: 'homehero-auth-service',    cwd, script: 'services/auth-service/server.js',    env: { ...env, AUTH_SERVICE_PORT: 4101 } },
+    { name: 'homehero-payment-service', cwd, script: 'services/payment-service/server.js', env: { ...env, PAYMENT_SERVICE_PORT: 4102 } },
+    { name: 'homehero-gateway',         cwd, script: 'services/gateway/server.js',         env: { ...env, GATEWAY_PORT: 4000 } },
+    { name: 'homehero-frontend',        cwd, script: 'server/prod-server.js',              env: { ...env, PORT: 4174 } },
   ],
 };

@@ -9,6 +9,7 @@
     "api": "node server/api.js",
     "gateway": "node services/gateway/server.js",
     "auth-service": "node services/auth-service/server.js",
+    "payment-service": "node services/payment-service/server.js",
     "dev:all": "bash ../scripts/dev-all.sh",
     "db:migrate": "node server/migrate.js",
     "db:seed": "node server/seed.js",
