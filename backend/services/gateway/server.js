@@ -13,6 +13,7 @@ const PORT = Number(process.env.GATEWAY_PORT || 4000);
 
 const AUTH_SERVICE = process.env.AUTH_SERVICE_URL || 'http://localhost:4101';
 const PAYMENT_SERVICE = process.env.PAYMENT_SERVICE_URL || 'http://localhost:4102';
+const BOOKING_SERVICE = process.env.BOOKING_SERVICE_URL || 'http://localhost:4103';
 const MONOLITH = process.env.MONOLITH_URL || 'http://localhost:4001';
 
 const app = express();
@@ -24,6 +25,8 @@ const ROUTES = [
   { prefix: `${BASE}/payments`,      target: PAYMENT_SERVICE, name: 'payment-service' },
   { prefix: `${BASE}/expert-wallet`, target: PAYMENT_SERVICE, name: 'payment-service' },
   { prefix: `${BASE}/wallet`,        target: PAYMENT_SERVICE, name: 'payment-service' },
+  { prefix: `${BASE}/bookings`,      target: BOOKING_SERVICE, name: 'booking-service' },
+  { prefix: `${BASE}/reviews`,       target: BOOKING_SERVICE, name: 'booking-service' },
 ];
 
 app.get('/gateway/health', (_req, res) => {

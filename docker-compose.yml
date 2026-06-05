@@ -50,6 +50,21 @@ services:
     depends_on:
       mysql: { condition: service_healthy }
 
+  booking-service:
+    build: ./backend
+    command: node services/booking-service/server.js
+    environment:
+      BOOKING_SERVICE_PORT: 4103
+      DB_HOST: mysql
+      DB_PASSWORD: ${DB_PASSWORD:-root}
+      DB_NAME: ${DB_NAME:-homehero}
+      JWT_SECRET: ${JWT_SECRET:?set a strong JWT_SECRET}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+      NODE_ENV: ${NODE_ENV:-production}
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      mysql: { condition: service_healthy }
+
   monolith:
     build: ./backend
     command: node server/api.js
@@ -73,9 +88,10 @@ services:
       GATEWAY_PORT: 4000
       AUTH_SERVICE_URL: http://auth-service:4101
       PAYMENT_SERVICE_URL: http://payment-service:4102
+      BOOKING_SERVICE_URL: http://booking-service:4103
       MONOLITH_URL: http://monolith:4001
     ports: ["4000:4000"]
-    depends_on: [auth-service, payment-service, monolith]
+    depends_on: [auth-service, payment-service, booking-service, monolith]
 
 volumes:
   mysql_data:

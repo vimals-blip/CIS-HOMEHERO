@@ -140,7 +140,9 @@ wirings + doc updates. Reference the verified status codes in the message.
 
 - ✅ `auth-service` — `/auth`, `/me`
 - ✅ `payment-service` — `/payments`, `/wallet`, `/expert-wallet`
-- ⏭️ `booking-service` — `/bookings`, `/reviews`
+- ✅ `booking-service` — `/bookings`, `/reviews` (realtime emits no-op here →
+      ≤15s poll fallback for status push until the Redis adapter lands)
 - ⏭️ `dispatch/realtime-service` — Socket.IO + dispatch + BullMQ worker
-      (the one that needs care — move the realtime init, not just routes)
+      (the one that needs care — add a Socket.IO Redis adapter so any process
+      can push events, then move the realtime init)
 - ⏭️ `notification-service` — `/notifications` + FCM

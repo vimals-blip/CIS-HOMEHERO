@@ -14,7 +14,7 @@
 ```
 homehero-spark/
 ├── package.json            root orchestrator (install:all, dev:all, db:*)
-├── scripts/dev-all.sh      starts monolith + auth-service + payment-service + gateway + frontend
+├── scripts/dev-all.sh      starts monolith + auth/payment/booking services + gateway + frontend
 ├── docker-compose.yml      mysql + redis + 3 backend services
 ├── docs/
 │
@@ -39,7 +39,8 @@ homehero-spark/
 │   └── services/
 │       ├── gateway/          public entry (:4000), routes by prefix
 │       ├── auth-service/     owns /auth + /me (:4101), reuses server/ modules
-│       └── payment-service/  owns /payments + /wallet + /expert-wallet (:4102)
+│       ├── payment-service/  owns /payments + /wallet + /expert-wallet (:4102)
+│       └── booking-service/  owns /bookings + /reviews (:4103)
 │
 └── frontend/
     ├── package.json        frontend deps + scripts
@@ -68,8 +69,8 @@ npm run dev:all                              # run the full stack
 ```
 
 Ports: gateway **:4000** (public), monolith **:4001**, auth-service **:4101**,
-payment-service **:4102**, frontend **:8080**. Logs from `dev:all` go to
-`/tmp/homehero-logs/`.
+payment-service **:4102**, booking-service **:4103**, frontend **:8080**. Logs
+from `dev:all` go to `/tmp/homehero-logs/`.
 
 ## 4. Environment variables
 
@@ -100,11 +101,12 @@ prefix to the owning service and proxies everything else (plus Socket.IO
 websockets) to the **monolith**. Services are peeled off one at a time without
 downtime.
 
-- **Extracted:** `auth-service` (`/auth/*`, `/me/*`) on :4101;
-  `payment-service` (`/payments/*`, `/wallet/*`, `/expert-wallet/*`) on :4102.
-- **Still in the monolith:** services, bookings, experts/KYC, coupons, support,
-  CMS, notifications, admin, realtime/dispatch.
-- **Next candidates (priority):** booking → dispatch/realtime → notification.
+- **Extracted:** `auth-service` (`/auth/*`, `/me/*`) :4101;
+  `payment-service` (`/payments/*`, `/wallet/*`, `/expert-wallet/*`) :4102;
+  `booking-service` (`/bookings/*`, `/reviews/*`) :4103.
+- **Still in the monolith:** services, experts/KYC, coupons, support, CMS,
+  notifications, admin, realtime/dispatch.
+- **Next candidates (priority):** dispatch/realtime → notification.
 
 Auth is **stateless JWT**: any service mints tokens with `JWT_SECRET` and any
 service verifies with the same secret, so a token from the auth-service is
@@ -155,9 +157,8 @@ docker compose up --build       # gateway published on :4000
 
 **Manual / PaaS:**
 
-1. Backend: run `node server/api.js`, `node services/auth-service/server.js`,
-   `node services/payment-service/server.js`, `node services/gateway/server.js`
-   (separate processes/containers). Set
+1. Backend: run `node server/api.js`, plus the auth/payment/booking services
+   and `node services/gateway/server.js` (separate processes/containers). Set
    `backend/.env` (real `JWT_SECRET`, prod DB, `REDIS_URL`).
 2. Frontend: `cd frontend && npm run build`. Serve the build (the bundled SSR
    server, or `backend/server/prod-server.js` which serves `frontend/dist`).
