@@ -4,8 +4,8 @@
 // shared MySQL) — the first service peeled off via the strangler pattern.
 import dotenv from 'dotenv';
 import express from 'express';
-import cors from 'cors';
 import pool from '../../server/db.js';
+import { corsMiddleware } from '../../server/middleware/cors.js';
 import { sanitizeBody } from '../../server/middleware/sanitize.js';
 import { errorHandler } from '../../server/middleware/errorHandler.js';
 import authRoutes from '../../server/routes/auth.js';
@@ -16,7 +16,7 @@ dotenv.config();
 const BASE = process.env.API_BASE_PATH || '/api/v1';
 const app = express();
 
-app.use(cors({ origin: true, credentials: true }));
+app.use(corsMiddleware);
 app.use(express.json());
 app.use(sanitizeBody);
 

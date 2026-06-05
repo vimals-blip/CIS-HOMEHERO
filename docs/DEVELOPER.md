@@ -178,11 +178,22 @@ See the launch checklist in §10.
 
 ## 10. Production launch checklist
 
-- [ ] Set a strong `JWT_SECRET` (`openssl rand -hex 32`) — the default is a
-      placeholder.
+Enforced in code (set `NODE_ENV=production`):
+- **`JWT_SECRET`** — the API refuses to boot in production with a missing/weak
+  (<32 char) secret. Generate with `openssl rand -hex 32`. A strong dev secret
+  already lives in `backend/.env`; rotate it for prod.
+- **CORS** — driven by `ALLOWED_ORIGINS` (comma-separated). Set it to your real
+  frontend origin(s), e.g. `https://app.homehero.com`. Empty in production =
+  cross-origin blocked. Applied on both the monolith and auth-service.
+
+Still operational / infra (you provide these):
 - [ ] Production MySQL with backups; run `db:migrate` (not `db:seed`).
-- [ ] Lock CORS on the gateway/services to the real frontend origin.
-- [ ] Serve everything over HTTPS; only expose the gateway.
+- [ ] Serve everything over HTTPS; only expose the gateway (nginx/Caddy/LB).
+- [ ] Build the frontend with `VITE_API_BASE` = your public gateway URL.
 - [ ] Set `REDIS_URL` so dispatch/queues run out-of-process.
-- [ ] Replace SMS/payment stubs with real providers.
+- [ ] Replace the SMS / payment / FCM stubs (`backend/server/providers/`) with
+      real providers + credentials.
 - [ ] Configure log shipping + a health/uptime monitor on `/gateway/health`.
+
+`docker compose up --build` requires `JWT_SECRET` to be set (it errors
+otherwise) and defaults `NODE_ENV=production`; pass `ALLOWED_ORIGINS` too.

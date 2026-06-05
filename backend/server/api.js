@@ -1,8 +1,8 @@
 import dotenv from 'dotenv';
 import http from 'node:http';
 import express from 'express';
-import cors from 'cors';
 import pool from './db.js';
+import { corsMiddleware } from './middleware/cors.js';
 import { sanitizeBody } from './middleware/sanitize.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { initRealtime } from './realtime/io.js';
@@ -25,21 +25,18 @@ import adminRoutes from './routes/admin.js';
 
 dotenv.config({ path: new URL('../.env', import.meta.url).pathname });
 
-if (process.env.NODE_ENV === 'production' && (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'dev-secret')) {
-  console.error('FATAL: JWT_SECRET must be set to a strong secret in production.');
+const WEAK_SECRETS = ['dev-secret', 'change-me', 'change-this-to-a-strong-secret', 'change-me-to-a-strong-secret'];
+if (process.env.NODE_ENV === 'production' &&
+    (!process.env.JWT_SECRET || WEAK_SECRETS.includes(process.env.JWT_SECRET) || process.env.JWT_SECRET.length < 32)) {
+  console.error('FATAL: JWT_SECRET must be a strong (32+ char) secret in production. Generate one with: openssl rand -hex 32');
   process.exit(1);
 }
 
 const BASE = process.env.API_BASE_PATH || '/api/v1';
 const app = express();
 
-app.use(cors({
-  origin: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
-}));
-app.options('*', cors());
+app.use(corsMiddleware);
+app.options('*', corsMiddleware);
 app.use(express.json());
 app.use(sanitizeBody);
 
