@@ -94,7 +94,7 @@ Pick one (configs in `deploy/`); replace `app.homehero.com` with your domain.
 
 **Caddy (auto-HTTPS, simplest):**
 ```bash
-caddy run --config deploy/Caddyfile
+DOMAIN=app.homehero.com caddy run --config deploy/Caddyfile
 ```
 
 **nginx (TLS via certbot):**
@@ -105,13 +105,24 @@ sudo ln -s /etc/nginx/sites-available/homehero /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-## Replace the stubs before real traffic
+## Enable the providers
 
-These live in `backend/server/providers/` and are no-op/console stubs — wire in
-real providers (credentials via `backend/.env`):
-- **SMS** (`smsProvider.js`) — OTP delivery (e.g. Twilio / MSG91).
-- **Payments** (`paymentController`/provider) — real gateway (e.g. Razorpay / Stripe).
-- **FCM** (`fcmProvider.js`) — push notifications.
+The integrations in `backend/server/providers/` are **already built** — each
+activates automatically when its credentials are present in `backend/.env`, and
+falls back to a safe mock otherwise. No code changes needed; just add keys:
+
+| Provider | File | Env vars |
+|----------|------|----------|
+| **Payments** (Razorpay, INR) | `paymentProvider.js` | `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` |
+| **SMS OTP** (MSG91) | `smsProvider.js` | `MSG91_AUTH_KEY`, `MSG91_SENDER_ID`, `MSG91_OTP_TEMPLATE_ID` |
+| **SMS OTP** (Twilio, fallback) | `smsProvider.js` | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` |
+| **Push** (Firebase FCM) | `fcmProvider.js` | `FIREBASE_SERVICE_ACCOUNT` (service-account JSON, one line) |
+
+- SMS picks MSG91 if its key is set, else Twilio, else mock (logs the OTP in dev).
+- FCM needs the `firebase-admin` package — it's an optional dependency, installed
+  by `npm run install:all` unless you used `--omit=optional`.
+- The frontend reads the Razorpay `key_id` from the order response; load Razorpay
+  Checkout on the client when going live (mock mode needs no client SDK).
 
 ## Post-deploy verification
 
