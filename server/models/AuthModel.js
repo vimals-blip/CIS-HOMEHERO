@@ -12,24 +12,25 @@ export const AuthModel = {
     return rows.length > 0;
   },
 
-  async createUser({ email, passwordHash, name, city, phone, role }) {
+  async createUser({ email, passwordHash, name, city, phone, role }, conn) {
+    const db = conn ?? pool;
     const id = `user-${crypto.randomUUID()}`;
-    await pool.query(
+    await db.query(
       'INSERT INTO users (id, email, password_hash, is_verified, created_at) VALUES (?, ?, ?, 1, NOW())',
       [id, email, passwordHash],
     );
-    await pool.query(
+    await db.query(
       `INSERT INTO profiles (id, name, phone, city, created_at) VALUES (?, ?, ?, ?, NOW())
        ON DUPLICATE KEY UPDATE name = VALUES(name), phone = VALUES(phone), city = VALUES(city)`,
       [id, name ?? null, phone ?? null, city ?? null],
     );
     if (phone) {
-      await pool.query(
+      await db.query(
         'INSERT INTO profile_contacts (user_id, phone, created_at) VALUES (?, ?, NOW()) ON DUPLICATE KEY UPDATE phone = VALUES(phone)',
         [id, phone],
       );
     }
-    await pool.query(
+    await db.query(
       'INSERT INTO user_roles (id, user_id, role, created_at) VALUES (?, ?, ?, NOW()) ON DUPLICATE KEY UPDATE role = VALUES(role)',
       [id, id, role],
     );
@@ -38,22 +39,24 @@ export const AuthModel = {
 
   // Create an expert (worker) record. New experts start SUBMITTED and unverified
   // until an admin approves them.
-  async createExpertProfile(userId, { gender, bio, experienceYears, servicePincodes }) {
-    await pool.query(
+  async createExpertProfile(userId, { gender, bio, experienceYears, servicePincodes }, conn) {
+    const db = conn ?? pool;
+    await db.query(
       `INSERT INTO experts (id, gender, bio, experience_years, is_verified, is_trained, status, service_pincodes, onboarding_status, created_at)
        VALUES (?, ?, ?, ?, 0, 0, 'OFFLINE', ?, 'SUBMITTED', NOW())
        ON DUPLICATE KEY UPDATE gender = VALUES(gender), bio = VALUES(bio), experience_years = VALUES(experience_years), service_pincodes = VALUES(service_pincodes)`,
       [userId, gender ?? 'FEMALE', bio ?? null, experienceYears ?? 0, JSON.stringify(servicePincodes ?? [])],
     );
-    await pool.query(
+    await db.query(
       'INSERT INTO expert_wallet (expert_id, available_balance, pending_balance, total_earned) VALUES (?, 0, 0, 0) ON DUPLICATE KEY UPDATE expert_id = expert_id',
       [userId],
     );
   },
 
-  async addExpertServices(expertId, serviceIds) {
+  async addExpertServices(expertId, serviceIds, conn) {
+    const db = conn ?? pool;
     for (const serviceId of serviceIds) {
-      await pool.query(
+      await db.query(
         'INSERT INTO expert_services (expert_id, service_id) VALUES (?, ?) ON DUPLICATE KEY UPDATE service_id = VALUES(service_id)',
         [expertId, serviceId],
       );

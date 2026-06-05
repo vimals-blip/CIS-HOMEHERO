@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs';
+import pool from '../db.js';
 import { AuthModel } from '../models/AuthModel.js';
 import { BadRequest, Conflict, HttpError } from '../errors.js';
 import { signAccessToken, generateRefreshToken, hashToken, refreshExpiryDate } from '../auth/tokens.js';
@@ -39,15 +40,27 @@ export const authController = {
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const userId = await AuthModel.createUser({ email, passwordHash, name, city, phone, role });
 
-    if (role === 'EXPERT') {
-      await AuthModel.createExpertProfile(userId, {
-        gender, bio, experienceYears: experience_years, servicePincodes: service_pincodes,
-      });
-      if (Array.isArray(service_ids) && service_ids.length) {
-        await AuthModel.addExpertServices(userId, service_ids);
+    // Atomic so an expert is never left with the role but no expert/wallet row.
+    const conn = await pool.getConnection();
+    let userId;
+    try {
+      await conn.beginTransaction();
+      userId = await AuthModel.createUser({ email, passwordHash, name, city, phone, role }, conn);
+      if (role === 'EXPERT') {
+        await AuthModel.createExpertProfile(userId, {
+          gender, bio, experienceYears: experience_years, servicePincodes: service_pincodes,
+        }, conn);
+        if (Array.isArray(service_ids) && service_ids.length) {
+          await AuthModel.addExpertServices(userId, service_ids, conn);
+        }
       }
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
     }
 
     res.status(201).json({ id: userId, email, role });
