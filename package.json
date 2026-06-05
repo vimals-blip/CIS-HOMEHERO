@@ -12,6 +12,7 @@
     "format": "prettier --write .",
     "db:migrate": "node server/migrate.js",
     "db:seed": "node server/seed.js",
+    "db:backfill-experts": "node server/backfillExperts.js",
     "check-env": "node server/check-env.js",
     "api": "node server/api.js",
     "backend": "node server/api.js",
