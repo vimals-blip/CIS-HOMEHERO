@@ -1,6 +1,7 @@
 import { ReviewModel } from '../models/ReviewModel.js';
 import { ExpertModel } from '../models/ExpertModel.js';
 import { BookingModel } from '../models/BookingModel.js';
+import { notify } from '../services/notificationService.js';
 import { BadRequest, Forbidden, NotFound, Conflict } from '../errors.js';
 
 export const reviewController = {
@@ -29,6 +30,7 @@ export const reviewController = {
       bookingId: booking_id, expertId: booking.expert_id, customerId: req.user.id, rating, comment,
     });
     await ExpertModel.recalcStats(booking.expert_id);
+    await notify(booking.expert_id, { type: 'review_received', title: 'New review', body: `You received a ${rating}★ review.`, bookingId: booking_id });
 
     res.status(201).json({ id, rating, comment });
   },

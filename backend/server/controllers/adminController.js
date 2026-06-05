@@ -8,6 +8,7 @@ import { WalletModel } from '../models/WalletModel.js';
 import { AuditModel } from '../models/AuditModel.js';
 import bcrypt from 'bcryptjs';
 import { audit } from '../services/auditService.js';
+import { notify } from '../services/notificationService.js';
 import { BadRequest, Conflict, NotFound } from '../errors.js';
 
 export const adminController = {
@@ -200,6 +201,12 @@ export const adminController = {
     }
     await WithdrawalModel.setStatus(req.params.id, next);
     audit(req, `WITHDRAWAL_${next}`, { entityType: 'withdrawal', entityId: req.params.id, detail: `₹${wd.amount} · expert ${wd.expert_id}` });
+    const wdMsg = {
+      APPROVED: `Your withdrawal of ₹${wd.amount} was approved and is being processed.`,
+      PAID: `₹${wd.amount} has been paid out to your account.`,
+      REJECTED: `Your withdrawal of ₹${wd.amount} was rejected and the amount returned to your balance.`,
+    };
+    await notify(wd.expert_id, { type: `withdrawal_${next.toLowerCase()}`, title: `Withdrawal ${next.toLowerCase()}`, body: wdMsg[next] });
     res.json({ status: 'updated', withdrawal_status: next });
   },
 

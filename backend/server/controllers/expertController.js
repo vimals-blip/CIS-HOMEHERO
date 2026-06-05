@@ -1,5 +1,6 @@
 import { ExpertModel } from '../models/ExpertModel.js';
 import { audit } from '../services/auditService.js';
+import { notify } from '../services/notificationService.js';
 import { BadRequest, Forbidden, NotFound } from '../errors.js';
 
 const VALID_STATUSES = ['ONLINE', 'OFFLINE', 'BUSY'];
@@ -68,6 +69,9 @@ export const expertController = {
     if (!expert) throw NotFound('Expert not found.');
     await ExpertModel.setVerified(req.params.id, is_verified);
     audit(req, is_verified ? 'EXPERT_VERIFIED' : 'EXPERT_REJECTED', { entityType: 'expert', entityId: req.params.id });
+    await notify(req.params.id, is_verified
+      ? { type: 'expert_verified', title: 'You’re verified! 🎉', body: 'Your profile is approved — go online to start receiving jobs.' }
+      : { type: 'expert_rejected', title: 'Verification update', body: 'Your verification needs attention. Please review your KYC documents.' });
     res.json({ status: 'updated', is_verified });
   },
 };
