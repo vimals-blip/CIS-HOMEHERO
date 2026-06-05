@@ -49,8 +49,7 @@ homehero-spark/
     └── src/
         ├── routes/         file-based pages (TanStack Router)
         ├── components/     UI + feature components
-        ├── lib/            api client, auth context, socket, utils
-        └── integrations/   supabase client (legacy/optional)
+        └── lib/            api client, auth context, socket, utils
 ```
 
 ## 3. Local setup
@@ -88,7 +87,6 @@ frontend **:8080**. Logs from `dev:all` go to `/tmp/homehero-logs/`.
 | Var | Purpose |
 |-----|---------|
 | `VITE_API_BASE` | API base; `:4000` (gateway) or `:4001` (monolith direct) |
-| `VITE_SUPABASE_*` | legacy/optional public Supabase values |
 
 > Only `VITE_*` vars are exposed to the browser. Never put secrets in
 > `frontend/.env`.
