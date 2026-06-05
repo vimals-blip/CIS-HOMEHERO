@@ -7,7 +7,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/api";
 import { serviceIcon } from "@/lib/icons";
-import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
@@ -94,7 +94,22 @@ function Home() {
           <h2 className="text-2xl font-bold md:text-3xl">What do you need help with?</h2>
           <p className="mt-1 text-sm text-muted-foreground">Pick a service and book by the hour</p>
         </div>
-        {isLoading ? <LoadingSpinner /> : (
+        {isLoading ? (
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="overflow-hidden rounded-2xl border bg-card animate-pulse">
+                <div className="h-36 w-full bg-muted" />
+                <div className="flex items-center justify-between gap-2 p-4">
+                  <div className="h-3 w-24 rounded bg-muted" />
+                  <div className="h-4 w-12 rounded bg-muted" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (services as any[]).length === 0 ? (
+          <EmptyState icon={Sparkles} title="No services available yet"
+            description="We're adding services in your area. Please check back soon." />
+        ) : (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
             {(services as any[]).map((s) => {
               const Icon = serviceIcon(s.icon_name);
