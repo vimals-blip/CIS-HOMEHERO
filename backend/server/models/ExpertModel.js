@@ -4,6 +4,7 @@ const PUBLIC_SELECT = `
   SELECT e.*, pr.name, pr.avatar_url, pr.city
   FROM experts e
   LEFT JOIN profiles pr ON pr.id = e.id
+  JOIN users u ON u.id = e.id
 `;
 
 export const ExpertModel = {
@@ -13,7 +14,7 @@ export const ExpertModel = {
       const [rows] = await pool.query(
         `${PUBLIC_SELECT}
          JOIN expert_services es ON es.expert_id = e.id
-         WHERE e.is_verified = 1 AND es.service_id = ?
+         WHERE e.is_verified = 1 AND u.is_blocked = 0 AND es.service_id = ?
          ORDER BY e.avg_rating DESC, e.total_jobs DESC
          LIMIT ? OFFSET ?`,
         [serviceId, limit, offset],
@@ -22,7 +23,7 @@ export const ExpertModel = {
     }
     const [rows] = await pool.query(
       `${PUBLIC_SELECT}
-       WHERE e.is_verified = 1
+       WHERE e.is_verified = 1 AND u.is_blocked = 0
        ORDER BY e.avg_rating DESC, e.total_jobs DESC
        LIMIT ? OFFSET ?`,
       [limit, offset],
@@ -47,7 +48,8 @@ export const ExpertModel = {
     const [online] = await pool.query(
       `SELECT e.* FROM experts e
        JOIN expert_services es ON es.expert_id = e.id
-       WHERE es.service_id = ? AND e.is_verified = 1 AND e.status = 'ONLINE'
+       JOIN users u ON u.id = e.id
+       WHERE es.service_id = ? AND e.is_verified = 1 AND e.status = 'ONLINE' AND u.is_blocked = 0
        ORDER BY e.avg_rating DESC, e.total_jobs DESC
        LIMIT 1`,
       [serviceId],
@@ -57,7 +59,8 @@ export const ExpertModel = {
     const [any] = await pool.query(
       `SELECT e.* FROM experts e
        JOIN expert_services es ON es.expert_id = e.id
-       WHERE es.service_id = ? AND e.is_verified = 1 AND e.status <> 'BUSY'
+       JOIN users u ON u.id = e.id
+       WHERE es.service_id = ? AND e.is_verified = 1 AND e.status <> 'BUSY' AND u.is_blocked = 0
        ORDER BY e.avg_rating DESC, e.total_jobs DESC
        LIMIT 1`,
       [serviceId],
@@ -65,8 +68,8 @@ export const ExpertModel = {
     return any[0] ?? null;
   },
 
-  // Dispatch candidates: ONLINE, verified experts who offer the service,
-  // with their current location, rating and active-job count for ranking.
+  // Dispatch candidates: ONLINE, verified, non-blocked experts who offer the
+  // service, with their current location, rating and active-job count for ranking.
   async findCandidatesForService(serviceId) {
     const [rows] = await pool.query(
       `SELECT e.id, e.avg_rating, e.current_lat, e.current_lng, e.status,
@@ -75,7 +78,8 @@ export const ExpertModel = {
             AND b.status IN ('ASSIGNED','ON_THE_WAY','ARRIVED','IN_PROGRESS')) AS active_jobs
        FROM experts e
        JOIN expert_services es ON es.expert_id = e.id
-       WHERE es.service_id = ? AND e.is_verified = 1 AND e.status = 'ONLINE'`,
+       JOIN users u ON u.id = e.id
+       WHERE es.service_id = ? AND e.is_verified = 1 AND e.status = 'ONLINE' AND u.is_blocked = 0`,
       [serviceId],
     );
     return rows ?? [];

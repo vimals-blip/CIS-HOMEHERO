@@ -70,6 +70,11 @@ export const UserModel = {
 
   async setBlocked(userId, blocked) {
     await pool.query('UPDATE users SET is_blocked = ? WHERE id = ?', [Number(blocked), userId]);
+    // If the user is an expert, blocking also takes them offline so they stop
+    // appearing in listings and receiving dispatches immediately.
+    if (blocked) {
+      await pool.query("UPDATE experts SET status = 'OFFLINE' WHERE id = ?", [userId]);
+    }
   },
 
   async setPassword(userId, passwordHash) {

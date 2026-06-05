@@ -40,6 +40,12 @@ super-admin: `superadmin@homehero.test` / `Password123`.
 Sensitive actions are recorded to `audit_logs` automatically (actor email/role,
 action, target, timestamp) — visible under **Audit Log**.
 
+**Blocking** an account (Users → Block) immediately: prevents login (403
+`ACCOUNT_BLOCKED`), and for experts also takes them **offline** and excludes
+them from auto-dispatch and customer listings — so a blocked expert can no
+longer receive or be assigned bookings. Unblocking reverses it (the expert
+must go online again).
+
 The **Users**, **Experts**, and **Bookings** lists are paginated (20 per page)
 with Prev/Next controls; the backend endpoints accept `?page=&limit=`. Search
 and filters reset to page 1.
