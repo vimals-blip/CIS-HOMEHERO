@@ -17,6 +17,7 @@
     "db:backfill-experts": "node server/backfillExperts.js",
     "check-env": "node server/check-env.js",
     "smoke:admin": "node scripts/admin-smoke.mjs",
+    "smoke:flows": "node scripts/flows-smoke.mjs",
     "create-admin": "node server/create-local-admin.js"
   },
   "dependencies": {

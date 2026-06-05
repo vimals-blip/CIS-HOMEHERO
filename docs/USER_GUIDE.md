@@ -118,3 +118,19 @@ signed up, an admin must approve you first.
 **An expert can't see their dashboard at all.**
 Their account may be missing its expert record (older accounts). An admin/dev
 can repair it with `npm run db:backfill-experts`, then approve them.
+
+---
+
+## Verifying the flows (for developers)
+
+A smoke test exercises both the customer and expert journeys end-to-end through
+the gateway (login, browse, address, booking, wallet, payment order, coupon,
+support; expert profile/wallet/jobs/online/docs/withdrawals):
+
+```bash
+npm run dev:all        # stack up
+npm run smoke:flows    # → "19 passed, 0 failed"
+```
+
+Source: `backend/scripts/flows-smoke.mjs`. The admin equivalent is
+`npm run smoke:admin` (see [ADMIN_GUIDE.md](ADMIN_GUIDE.md)).

@@ -40,6 +40,10 @@ super-admin: `superadmin@homehero.test` / `Password123`.
 Sensitive actions are recorded to `audit_logs` automatically (actor email/role,
 action, target, timestamp) — visible under **Audit Log**.
 
+The **Users**, **Experts**, and **Bookings** lists are paginated (20 per page)
+with Prev/Next controls; the backend endpoints accept `?page=&limit=`. Search
+and filters reset to page 1.
+
 ## Common tasks
 
 **Approve a new expert**

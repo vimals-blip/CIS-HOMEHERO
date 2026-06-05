@@ -114,6 +114,21 @@ function SectionHead({ title, desc, action }: { title: string; desc?: string; ac
   );
 }
 
+const PAGE_SIZE = 20;
+
+// Lightweight pager: a full page of results implies there may be a next page.
+function Pager({ page, onPage, count }: { page: number; onPage: (p: number) => void; count: number }) {
+  const hasNext = count === PAGE_SIZE;
+  if (page === 1 && !hasNext) return null;
+  return (
+    <div className="mt-3 flex items-center justify-end gap-2">
+      <span className="text-xs text-muted-foreground">Page {page}</span>
+      <Button variant="outline" size="sm" className="h-8" disabled={page === 1} onClick={() => onPage(page - 1)}>Prev</Button>
+      <Button variant="outline" size="sm" className="h-8" disabled={!hasNext} onClick={() => onPage(page + 1)}>Next</Button>
+    </div>
+  );
+}
+
 function AdminDashboard() {
   const { user, role, loading } = useAuth();
   const isAdmin = role === "ADMIN" || role === "SUPER_ADMIN";
@@ -137,11 +152,13 @@ function AdminDashboard() {
 
   const { data, isLoading } = useQuery({ enabled: isAdmin, queryKey: ["admin-overview"], queryFn: () => apiFetch("/admin/overview") });
 
+  const [expPage, setExpPage] = useState(1);
+  useEffect(() => { setExpPage(1); }, [expQ, expStatus, expVerified]);
   const { data: experts = [], isLoading: expLoading } = useQuery({
     enabled: isAdmin && section === "experts",
-    queryKey: ["admin-experts", expQ, expStatus, expVerified],
+    queryKey: ["admin-experts", expQ, expStatus, expVerified, expPage],
     queryFn: () => {
-      const p = new URLSearchParams({ limit: "50" });
+      const p = new URLSearchParams({ limit: String(PAGE_SIZE), page: String(expPage) });
       if (expQ) p.set("q", expQ);
       if (expStatus !== "all") p.set("status", expStatus);
       if (expVerified !== "all") p.set("is_verified", expVerified);
@@ -150,12 +167,16 @@ function AdminDashboard() {
   });
 
   const [userQ, setUserQ] = useState("");
+  const [userPage, setUserPage] = useState(1);
+  useEffect(() => { setUserPage(1); }, [userQ]);
   const { data: users = [], isLoading: usersLoading } = useQuery({
-    enabled: isAdmin && section === "users", queryKey: ["admin-users", userQ],
-    queryFn: () => apiFetch(`/admin/users?limit=100${userQ ? `&q=${encodeURIComponent(userQ)}` : ""}`),
+    enabled: isAdmin && section === "users", queryKey: ["admin-users", userQ, userPage],
+    queryFn: () => apiFetch(`/admin/users?limit=${PAGE_SIZE}&page=${userPage}${userQ ? `&q=${encodeURIComponent(userQ)}` : ""}`),
   });
+  const [bkPage, setBkPage] = useState(1);
   const { data: allBookings = [], isLoading: bookingsLoading } = useQuery({
-    enabled: isAdmin && section === "bookings", queryKey: ["admin-bookings"], queryFn: () => apiFetch("/admin/bookings?limit=50"),
+    enabled: isAdmin && section === "bookings", queryKey: ["admin-bookings", bkPage],
+    queryFn: () => apiFetch(`/admin/bookings?limit=${PAGE_SIZE}&page=${bkPage}`),
   });
   const { data: withdrawals = [], isLoading: wdLoading } = useQuery({
     enabled: isAdmin && section === "settlements", queryKey: ["admin-withdrawals"], queryFn: () => apiFetch("/admin/withdrawals"),
@@ -602,6 +623,7 @@ function AdminDashboard() {
                   </table>
                 </div>
               )}
+              <Pager page={expPage} onPage={setExpPage} count={experts.length} />
             </div>
           )}
 
@@ -638,6 +660,7 @@ function AdminDashboard() {
                   </table>
                 </div>
               )}
+              <Pager page={bkPage} onPage={setBkPage} count={allBookings.length} />
             </div>
           )}
 
@@ -679,6 +702,7 @@ function AdminDashboard() {
                   </table>
                 </div>
               )}
+              <Pager page={userPage} onPage={setUserPage} count={users.length} />
 
               {/* User detail dialog — profile, history, CRUD */}
               <Dialog open={!!detailUserId} onOpenChange={(o) => !o && setDetailUserId(null)}>
