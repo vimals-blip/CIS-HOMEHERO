@@ -10,7 +10,7 @@ router.get('/',    asyncHandler(serviceController.list));
 router.get('/:id', asyncHandler(serviceController.getOne));
 
 // Admin
-router.post('/',      authMiddleware, requireRole('ADMIN'), asyncHandler(serviceController.create));
-router.patch('/:id',  authMiddleware, requireRole('ADMIN'), asyncHandler(serviceController.update));
+router.post('/',      authMiddleware, requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(serviceController.create));
+router.patch('/:id',  authMiddleware, requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(serviceController.update));
 
 export default router;

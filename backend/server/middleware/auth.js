@@ -24,3 +24,9 @@ export function requireRole(...roles) {
     next();
   };
 }
+
+// A SUPER_ADMIN can do anything an ADMIN can — use this for ownership/admin
+// checks inside controllers so super-admins are never wrongly forbidden.
+export function isAdmin(user) {
+  return user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
+}

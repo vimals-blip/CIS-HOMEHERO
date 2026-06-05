@@ -9,6 +9,7 @@ import { PaymentModel } from '../models/PaymentModel.js';
 import { dispatchService } from '../services/dispatchService.js';
 import { emitToBooking } from '../realtime/io.js';
 import { notify } from '../services/notificationService.js';
+import { isAdmin } from '../middleware/auth.js';
 import { BadRequest, Forbidden, NotFound } from '../errors.js';
 
 const VALID_PAYMENT_METHODS = ['CASH', 'WALLET'];
@@ -64,7 +65,7 @@ export const bookingController = {
   async getOne(req, res) {
     const booking = await BookingModel.findById(req.params.id);
     if (!booking) throw NotFound('Booking not found.');
-    if (req.user.role !== 'ADMIN' && booking.customer_id !== req.user.id && booking.expert_id !== req.user.id) {
+    if (!isAdmin(req.user) && booking.customer_id !== req.user.id && booking.expert_id !== req.user.id) {
       throw Forbidden();
     }
     const events = await BookingModel.listEvents(req.params.id);
@@ -210,7 +211,7 @@ export const bookingController = {
     const { status } = req.body;
     const booking = await BookingModel.findById(req.params.id);
     if (!booking) throw NotFound('Booking not found.');
-    if (req.user.role !== 'ADMIN' && booking.expert_id !== req.user.id) throw Forbidden();
+    if (!isAdmin(req.user) && booking.expert_id !== req.user.id) throw Forbidden();
 
     const expected = EXPERT_FLOW[booking.status];
     if (!expected || status !== expected) {
@@ -252,7 +253,7 @@ export const bookingController = {
   async reject(req, res) {
     const booking = await BookingModel.findById(req.params.id);
     if (!booking) throw NotFound('Booking not found.');
-    if (req.user.role !== 'ADMIN' && booking.expert_id !== req.user.id) throw Forbidden();
+    if (!isAdmin(req.user) && booking.expert_id !== req.user.id) throw Forbidden();
     if (!['ASSIGNED', 'ACCEPTED'].includes(booking.status)) {
       throw BadRequest('CANNOT_REJECT', 'Only an assigned, not-yet-started booking can be rejected.');
     }
@@ -274,7 +275,7 @@ export const bookingController = {
     const { reason = null } = req.body;
     const booking = await BookingModel.findById(req.params.id);
     if (!booking) throw NotFound('Booking not found.');
-    if (req.user.role !== 'ADMIN' && booking.customer_id !== req.user.id) throw Forbidden();
+    if (!isAdmin(req.user) && booking.customer_id !== req.user.id) throw Forbidden();
 
     if (['IN_PROGRESS', 'COMPLETED', 'CANCELLED'].includes(booking.status)) {
       throw BadRequest('CANNOT_CANCEL', 'This booking can no longer be cancelled.');

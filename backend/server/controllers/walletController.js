@@ -1,6 +1,7 @@
 import { WalletModel } from '../models/WalletModel.js';
 import { WithdrawalModel } from '../models/WithdrawalModel.js';
 import { ExpertModel } from '../models/ExpertModel.js';
+import { isAdmin } from '../middleware/auth.js';
 import { BadRequest, Forbidden } from '../errors.js';
 
 const MAX_TOPUP = 50000;
@@ -10,7 +11,7 @@ export const walletController = {
   // Expert earnings wallet (kept for the expert dashboard).
   async get(req, res) {
     const { expertId } = req.params;
-    if (req.user.id !== expertId && req.user.role !== 'ADMIN') throw Forbidden();
+    if (req.user.id !== expertId && !isAdmin(req.user)) throw Forbidden();
     const wallet = await WalletModel.findByExpert(expertId);
     res.json(wallet);
   },
@@ -18,7 +19,7 @@ export const walletController = {
   // Expert requests a payout against their available balance.
   async withdraw(req, res) {
     const { expertId } = req.params;
-    if (req.user.id !== expertId && req.user.role !== 'ADMIN') throw Forbidden();
+    if (req.user.id !== expertId && !isAdmin(req.user)) throw Forbidden();
     const amount = Number(req.body.amount);
     if (!amount || amount < MIN_WITHDRAWAL) throw BadRequest('INVALID_AMOUNT', `Minimum withdrawal is ₹${MIN_WITHDRAWAL}.`);
 
@@ -35,14 +36,14 @@ export const walletController = {
 
   async withdrawals(req, res) {
     const { expertId } = req.params;
-    if (req.user.id !== expertId && req.user.role !== 'ADMIN' && req.user.role !== 'SUPER_ADMIN') throw Forbidden();
+    if (req.user.id !== expertId && !isAdmin(req.user)) throw Forbidden();
     res.json(await WithdrawalModel.listForExpert(expertId));
   },
 
   // Per-job earnings history (who booked, what, how much earned).
   async earnings(req, res) {
     const { expertId } = req.params;
-    if (req.user.id !== expertId && req.user.role !== 'ADMIN' && req.user.role !== 'SUPER_ADMIN') throw Forbidden();
+    if (req.user.id !== expertId && !isAdmin(req.user)) throw Forbidden();
     res.json(await ExpertModel.earningsHistory(expertId));
   },
 

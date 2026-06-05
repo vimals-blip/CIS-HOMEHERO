@@ -74,3 +74,5 @@ app stays fully working throughout. See [docs/DEVELOPER.md](docs/DEVELOPER.md).
   Docker/PM2, reverse proxy + HTTPS, go-live checklist).
 - **[docs/EXTRACTING_A_SERVICE.md](docs/EXTRACTING_A_SERVICE.md)** — playbook for
   peeling a domain off the monolith into its own microservice.
+- **[docs/ADMIN_GUIDE.md](docs/ADMIN_GUIDE.md)** — admin console capabilities,
+  roles (ADMIN vs SUPER_ADMIN), and the `npm run smoke:admin` verification.

@@ -1,6 +1,7 @@
 import { ExpertModel } from '../models/ExpertModel.js';
 import { audit } from '../services/auditService.js';
 import { notify } from '../services/notificationService.js';
+import { isAdmin } from '../middleware/auth.js';
 import { BadRequest, Forbidden, NotFound } from '../errors.js';
 
 const VALID_STATUSES = ['ONLINE', 'OFFLINE', 'BUSY'];
@@ -47,7 +48,7 @@ export const expertController = {
     const { id } = req.params;
     const { status } = req.body;
     if (!VALID_STATUSES.includes(status)) throw BadRequest('INVALID_STATUS', 'status must be ONLINE, OFFLINE, or BUSY.');
-    if (req.user.id !== id && req.user.role !== 'ADMIN') throw Forbidden();
+    if (req.user.id !== id && !isAdmin(req.user)) throw Forbidden();
     await ExpertModel.setStatus(id, status);
     res.json({ status: 'updated', expert_status: status });
   },
@@ -56,7 +57,7 @@ export const expertController = {
     const { id } = req.params;
     const { lat, lng } = req.body;
     if (lat == null || lng == null) throw BadRequest('MISSING_FIELDS', 'lat and lng are required.');
-    if (req.user.id !== id && req.user.role !== 'ADMIN') throw Forbidden();
+    if (req.user.id !== id && !isAdmin(req.user)) throw Forbidden();
     await ExpertModel.setLocation(id, lat, lng);
     res.json({ status: 'updated' });
   },
