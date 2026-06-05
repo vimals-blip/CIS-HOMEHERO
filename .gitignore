@@ -12,7 +12,8 @@ dist
 dist-ssr
 .output
 .vinxi
-.tanstack/**
+.tanstack
+**/.tanstack/**
 .nitro
 *.local
 
@@ -31,7 +32,7 @@ dist-ssr
 *.sln
 *.sw?
 
-# Environment secrets
+# Environment secrets (any folder)
 .env
 .env.local
-server/.env
+.env.*.local

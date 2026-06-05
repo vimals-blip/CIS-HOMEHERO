@@ -21,7 +21,7 @@ services:
     ports: ["6379:6379"]
 
   auth-service:
-    build: .
+    build: ./backend
     command: node services/auth-service/server.js
     environment:
       AUTH_SERVICE_PORT: 4101
@@ -33,7 +33,7 @@ services:
       mysql: { condition: service_healthy }
 
   monolith:
-    build: .
+    build: ./backend
     command: node server/api.js
     environment:
       API_PORT: 4001
@@ -47,7 +47,7 @@ services:
       redis: { condition: service_started }
 
   gateway:
-    build: .
+    build: ./backend
     command: node services/gateway/server.js
     environment:
       GATEWAY_PORT: 4000

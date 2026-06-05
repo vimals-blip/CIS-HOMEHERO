@@ -1,27 +1,28 @@
 #!/usr/bin/env bash
 # Bring the whole HomeHero stack up locally: monolith + auth-service + gateway + frontend.
+# Layout: backend/ (Node services) and frontend/ (React app).
 # Usage: bash scripts/dev-all.sh   (Ctrl-C stops everything)
 set -e
-cd "$(dirname "$0")/.."
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 mkdir -p /tmp/homehero-logs
 
 echo "▸ Stopping any previous instances…"
 pkill -f "server/api.js" 2>/dev/null || true
 pkill -f "services/auth-service/server.js" 2>/dev/null || true
 pkill -f "services/gateway/server.js" 2>/dev/null || true
-pkill -f "vite dev" 2>/dev/null || true
+pkill -f "vite" 2>/dev/null || true
 sleep 2
 
 echo "▸ Starting monolith (:4001)…"
-node server/api.js > /tmp/homehero-logs/monolith.log 2>&1 &
+( cd "$ROOT/backend" && node server/api.js ) > /tmp/homehero-logs/monolith.log 2>&1 &
 echo "▸ Starting auth-service (:4101)…"
-node services/auth-service/server.js > /tmp/homehero-logs/auth.log 2>&1 &
+( cd "$ROOT/backend" && node services/auth-service/server.js ) > /tmp/homehero-logs/auth.log 2>&1 &
 sleep 2
 echo "▸ Starting API gateway (:4000)…"
-node services/gateway/server.js > /tmp/homehero-logs/gateway.log 2>&1 &
+( cd "$ROOT/backend" && node services/gateway/server.js ) > /tmp/homehero-logs/gateway.log 2>&1 &
 sleep 1
 echo "▸ Starting frontend (:8080)…"
-npm run dev > /tmp/homehero-logs/frontend.log 2>&1 &
+( cd "$ROOT/frontend" && npm run dev ) > /tmp/homehero-logs/frontend.log 2>&1 &
 
 sleep 5
 echo ""

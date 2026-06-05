@@ -1,9 +1,10 @@
 import express from 'express';
 import path from 'node:path';
-import server from '../dist/server/server.js';
+// SSR bundle + client assets come from the frontend build (frontend/dist).
+import server from '../../frontend/dist/server/server.js';
 
 const app = express();
-const clientDist = path.resolve(process.cwd(), 'dist/client');
+const clientDist = path.resolve(process.cwd(), '../frontend/dist/client');
 
 app.use(express.static(clientDist, { index: false, extensions: ['html'] }));
 
