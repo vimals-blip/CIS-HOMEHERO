@@ -79,10 +79,16 @@ export async function apiFetch<T = any>(
 
   const res = await fetch(url, { ...options, headers });
 
-  // Access token expired? Transparently refresh once and retry.
-  if (res.status === 401 && !retried && !path.startsWith('/auth/') && getRefreshToken()) {
-    const newToken = await refreshAccessToken();
-    if (newToken) return apiFetch<T>(path, options, true);
+  // 401 → the session isn't valid. Try a one-time transparent refresh; if that
+  // can't recover it (no/expired refresh token, rotated secret, etc.), clear the
+  // session so the app redirects to login instead of rendering a broken,
+  // data-less dashboard.
+  if (res.status === 401 && !retried && !path.startsWith('/auth/')) {
+    if (getRefreshToken()) {
+      const newToken = await refreshAccessToken();
+      if (newToken) return apiFetch<T>(path, options, true);
+    }
+    clearTokens();
   }
 
   const body = await res.json().catch(() => null);
