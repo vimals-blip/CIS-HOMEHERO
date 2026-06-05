@@ -72,3 +72,5 @@ app stays fully working throughout. See [docs/DEVELOPER.md](docs/DEVELOPER.md).
   customers, experts, and admins.
 - **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** — production deploy (topology,
   Docker/PM2, reverse proxy + HTTPS, go-live checklist).
+- **[docs/EXTRACTING_A_SERVICE.md](docs/EXTRACTING_A_SERVICE.md)** — playbook for
+  peeling a domain off the monolith into its own microservice.

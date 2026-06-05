@@ -39,7 +39,8 @@ and lets us validate each service boundary before the next.
 3. **notification-service** — notifications + FCM.
 
 Each follows the same recipe: new `services/<name>/server.js` reusing its route
-modules, add it to the gateway registry, point the prefix at it, verify.
+modules, add it to the gateway registry, point the prefix at it, verify. The
+full step-by-step is in [docs/EXTRACTING_A_SERVICE.md](../../docs/EXTRACTING_A_SERVICE.md).
 
 ## Run locally (without Docker)
 ```bash
