@@ -70,3 +70,5 @@ app stays fully working throughout. See [docs/DEVELOPER.md](docs/DEVELOPER.md).
   layout, environment, API surface, deployment, troubleshooting.
 - **[docs/USER_GUIDE.md](docs/USER_GUIDE.md)** — step-by-step guides for
   customers, experts, and admins.
+- **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** — production deploy (topology,
+  Docker/PM2, reverse proxy + HTTPS, go-live checklist).

@@ -1,0 +1,23 @@
+# HomeHero — single-domain reverse proxy with automatic HTTPS (Caddy v2).
+# Routes the API + Socket.IO to the gateway and everything else to the
+# frontend SSR server. Replace app.homehero.com with your real domain, then:
+#   caddy run --config deploy/Caddyfile
+#
+# Topology (all on the same host here; split across hosts by changing targets):
+#   /api/*, /socket.io/*  -> gateway        :4000
+#   everything else        -> frontend SSR   :4174
+
+app.homehero.com {
+	encode zstd gzip
+
+	# API + realtime → gateway (Caddy proxies WebSocket upgrades automatically)
+	@api path /api/* /socket.io/*
+	handle @api {
+		reverse_proxy localhost:4000
+	}
+
+	# App (SSR + static assets) → frontend production server
+	handle {
+		reverse_proxy localhost:4174
+	}
+}
