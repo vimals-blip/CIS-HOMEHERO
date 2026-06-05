@@ -1,4 +1,5 @@
 import { ExpertModel } from '../models/ExpertModel.js';
+import { audit } from '../services/auditService.js';
 import { BadRequest, Forbidden, NotFound } from '../errors.js';
 
 const VALID_STATUSES = ['ONLINE', 'OFFLINE', 'BUSY'];
@@ -66,6 +67,7 @@ export const expertController = {
     const expert = await ExpertModel.findById(req.params.id);
     if (!expert) throw NotFound('Expert not found.');
     await ExpertModel.setVerified(req.params.id, is_verified);
+    audit(req, is_verified ? 'EXPERT_VERIFIED' : 'EXPERT_REJECTED', { entityType: 'expert', entityId: req.params.id });
     res.json({ status: 'updated', is_verified });
   },
 };

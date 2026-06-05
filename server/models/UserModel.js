@@ -24,18 +24,27 @@ export const UserModel = {
     return rows[0] ?? null;
   },
 
-  // Full activity history for the admin detail view.
+  // Full activity history for the admin detail view — includes who the
+  // counterparty was and (for expert jobs) the expert's earning on each.
   async bookingsForUser(userId) {
     const [rows] = await pool.query(
-      `SELECT b.id, b.status, b.booking_type, b.total_amount, b.created_at,
+      `SELECT b.id, b.status, b.booking_type, b.total_amount, b.expert_amount, b.created_at,
         s.name AS service_name,
+        cust.name AS customer_name, exp.name AS expert_name,
         CASE WHEN b.customer_id = ? THEN 'customer' ELSE 'expert' END AS as_role
-       FROM bookings b LEFT JOIN services s ON s.id = b.service_id
+       FROM bookings b
+       LEFT JOIN services s ON s.id = b.service_id
+       LEFT JOIN profiles cust ON cust.id = b.customer_id
+       LEFT JOIN profiles exp ON exp.id = b.expert_id
        WHERE b.customer_id = ? OR b.expert_id = ?
-       ORDER BY b.created_at DESC LIMIT 20`,
+       ORDER BY b.created_at DESC LIMIT 25`,
       [userId, userId, userId],
     );
-    return (rows ?? []).map((r) => ({ ...r, total_amount: Number(r.total_amount) }));
+    return (rows ?? []).map((r) => ({
+      ...r,
+      total_amount: Number(r.total_amount),
+      expert_amount: Number(r.expert_amount),
+    }));
   },
 
   async statsForUser(userId) {
@@ -61,6 +70,10 @@ export const UserModel = {
 
   async setBlocked(userId, blocked) {
     await pool.query('UPDATE users SET is_blocked = ? WHERE id = ?', [Number(blocked), userId]);
+  },
+
+  async setPassword(userId, passwordHash) {
+    await pool.query('UPDATE users SET password_hash = ? WHERE id = ?', [passwordHash, userId]);
   },
 
   // Hard delete — profiles FK cascades to bookings/experts/etc.; then users row.

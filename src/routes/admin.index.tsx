@@ -5,6 +5,7 @@ import {
   LayoutDashboard, ShieldCheck, Users, Briefcase, Tag, Ticket,
   CheckCircle2, XCircle, Plus, RefreshCw, Search, IndianRupee,
   Star, BookOpen, Circle, AlertCircle, Wallet, LifeBuoy, Settings as SettingsIcon, Send, ArrowLeft,
+  ScrollText, KeyRound,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -29,7 +30,7 @@ export const Route = createFileRoute("/admin/")({
   component: AdminDashboard,
 });
 
-type Section = "overview" | "kyc" | "experts" | "bookings" | "users" | "services" | "coupons" | "settlements" | "support" | "settings" | "admins";
+type Section = "overview" | "kyc" | "experts" | "bookings" | "users" | "services" | "coupons" | "settlements" | "support" | "settings" | "admins" | "audit";
 
 const STATUS_PILL: Record<string, string> = {
   SEARCHING:   "bg-amber-50 text-amber-700 ring-1 ring-amber-200",
@@ -60,6 +61,7 @@ const NAV: { id: Section; label: string; icon: any; badge?: (d: any) => number; 
   { id: "support", label: "Support", icon: LifeBuoy },
   { id: "settings", label: "Settings", icon: SettingsIcon, superOnly: true },
   { id: "admins", label: "Admins", icon: ShieldCheck, superOnly: true },
+  { id: "audit", label: "Audit Log", icon: ScrollText, superOnly: true },
 ];
 
 function Sidebar({ active, onChange, data, isSuperAdmin }: { active: Section; onChange: (s: Section) => void; data: any; isSuperAdmin: boolean }) {
@@ -271,6 +273,25 @@ function AdminDashboard() {
     onError: (e: any) => toast.error(e.message),
   });
 
+  // Admin password reset — backend returns a one-time temp password when none supplied.
+  const [tempPassword, setTempPassword] = useState<string | null>(null);
+  const resetPassword = useMutation({
+    mutationFn: () => apiFetch<{ temp_password?: string }>(`/admin/users/${detailUserId}/reset-password`, { method: "POST", body: JSON.stringify({}) }),
+    onSuccess: (d) => {
+      if (d.temp_password) { setTempPassword(d.temp_password); toast.success("Temporary password generated"); }
+      else toast.success("Password reset");
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+  useEffect(() => { setTempPassword(null); }, [detailUserId]);
+
+  // Expert earnings ledger — fetched only when the open user is an expert.
+  const { data: earnings = [] } = useQuery({
+    enabled: !!detailUserId && !!userDetail?.expert,
+    queryKey: ["admin-earnings", detailUserId],
+    queryFn: () => apiFetch(`/expert-wallet/${detailUserId}/earnings`),
+  });
+
   // Admin management (super-admin only)
   const [promoteEmail, setPromoteEmail] = useState("");
   const { data: admins = [] } = useQuery({
@@ -280,6 +301,14 @@ function AdminDashboard() {
     mutationFn: (body: object) => apiFetch("/admin/admins", { method: "POST", body: JSON.stringify(body) }),
     onSuccess: () => { toast.success("Role updated"); setPromoteEmail(""); qc.invalidateQueries({ queryKey: ["admin-admins"] }); },
     onError: (e: any) => toast.error(e.message),
+  });
+
+  // Audit trail (super-admin only)
+  const [auditAction, setAuditAction] = useState("all");
+  const { data: auditLogs = [], isLoading: auditLoading } = useQuery({
+    enabled: isSuperAdmin && section === "audit",
+    queryKey: ["admin-audit", auditAction],
+    queryFn: () => apiFetch(`/admin/audit-logs?limit=200${auditAction !== "all" ? `&action=${encodeURIComponent(auditAction)}` : ""}`),
   });
 
   const verify = useMutation({
@@ -698,6 +727,23 @@ function AdminDashboard() {
                         </div>
                       )}
 
+                      {/* Expert earnings ledger */}
+                      {userDetail.expert && (
+                        <div>
+                          <div className="mb-1.5 text-[10px] font-semibold uppercase text-muted-foreground">Earnings ({(earnings as any[]).length})</div>
+                          {(earnings as any[]).length === 0 ? <p className="text-xs text-muted-foreground">No completed jobs yet.</p> : (
+                            <div className="max-h-40 space-y-1 overflow-auto">
+                              {(earnings as any[]).map((e) => (
+                                <div key={e.id} className="flex items-center justify-between rounded-lg border px-3 py-1.5 text-xs">
+                                  <span>{e.service_name ?? "Service"} <span className="text-muted-foreground">· {e.customer_name ?? "—"}</span></span>
+                                  <span className="font-semibold text-emerald-600">+₹{Number(e.expert_amount).toLocaleString("en-IN")}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       {/* Booking history */}
                       <div>
                         <div className="mb-1.5 text-[10px] font-semibold uppercase text-muted-foreground">Recent activity ({(userDetail.bookings ?? []).length})</div>
@@ -713,10 +759,25 @@ function AdminDashboard() {
                         )}
                       </div>
 
+                      {/* One-time temp password reveal */}
+                      {tempPassword && (
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                          <div className="text-[10px] font-semibold uppercase text-amber-700">Temporary password — copy now, shown once</div>
+                          <div className="mt-1 flex items-center justify-between gap-2">
+                            <code className="font-mono text-sm font-bold tracking-wide text-amber-900">{tempPassword}</code>
+                            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { navigator.clipboard?.writeText(tempPassword); toast.success("Copied"); }}>Copy</Button>
+                          </div>
+                        </div>
+                      )}
+
                       {/* Actions */}
                       <div className="flex items-center justify-between border-t pt-3">
                         <span className="text-[11px] text-muted-foreground">Joined {userDetail.created_at ? new Date(userDetail.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}</span>
                         <div className="flex gap-2">
+                          <Button size="sm" variant="outline" className="h-8 text-xs"
+                            onClick={() => { if (confirm("Generate a new temporary password for this user?")) resetPassword.mutate(); }} disabled={resetPassword.isPending}>
+                            <KeyRound className="mr-1 h-3.5 w-3.5" /> Reset password
+                          </Button>
                           <Button size="sm" variant="outline" className={cn("h-8 text-xs", userDetail.is_blocked ? "text-emerald-600" : "text-amber-600")}
                             onClick={() => saveUser.mutate({ is_blocked: !userDetail.is_blocked })} disabled={saveUser.isPending}>
                             {userDetail.is_blocked ? "Unblock" : "Block"}
@@ -1025,6 +1086,48 @@ function AdminDashboard() {
                   </tbody>
                 </table>
               </div>
+            </div>
+          )}
+
+          {section === "audit" && (
+            <div>
+              <SectionHead title="Audit Log" desc="Sensitive admin actions across the platform"
+                action={
+                  <div className="flex gap-2">
+                    <Select value={auditAction} onValueChange={setAuditAction}>
+                      <SelectTrigger className="w-44"><SelectValue placeholder="Action" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All actions</SelectItem>
+                        {["USER_BLOCKED","USER_UNBLOCKED","USER_UPDATED","USER_DELETED","PASSWORD_RESET","ROLE_CHANGED","EXPERT_VERIFIED","EXPERT_REJECTED","WITHDRAWAL_PAID","WITHDRAWAL_REJECTED"].map((a) => (
+                          <SelectItem key={a} value={a}>{a.replace(/_/g, " ")}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button variant="outline" size="sm" onClick={() => qc.invalidateQueries({ queryKey: ["admin-audit"] })}><RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Refresh</Button>
+                  </div>
+                } />
+              {auditLoading ? <div className="flex h-40 items-center justify-center"><LoadingSpinner /></div> : (auditLogs as any[]).length === 0 ? (
+                <div className="flex flex-col items-center gap-2 rounded-2xl border bg-muted/20 py-16"><ScrollText className="h-8 w-8 text-muted-foreground" /><p className="text-sm text-muted-foreground">No audit entries.</p></div>
+              ) : (
+                <div className="overflow-hidden rounded-2xl border bg-card">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/30 text-xs font-medium text-muted-foreground">
+                      <tr><th className="px-5 py-3.5 text-left">When</th><th className="px-5 py-3.5 text-left">Actor</th><th className="px-5 py-3.5 text-left">Action</th><th className="px-5 py-3.5 text-left">Target</th><th className="px-5 py-3.5 text-left">Detail</th></tr>
+                    </thead>
+                    <tbody>
+                      {(auditLogs as any[]).map((l) => (
+                        <tr key={l.id} className="border-t hover:bg-muted/20">
+                          <td className="px-5 py-3 text-xs text-muted-foreground">{l.created_at ? new Date(l.created_at).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—"}</td>
+                          <td className="px-5 py-3"><div className="text-xs font-medium">{l.actor_email ?? l.actor_id ?? "—"}</div>{l.actor_role && <div className="text-[10px] text-muted-foreground">{l.actor_role}</div>}</td>
+                          <td className="px-5 py-3"><span className="rounded-full bg-slate-100 px-2.5 py-0.5 font-mono text-[10px] font-semibold text-slate-700">{l.action}</span></td>
+                          <td className="px-5 py-3 text-xs text-muted-foreground">{l.entity_type ? `${l.entity_type}:${l.entity_id ?? "—"}` : "—"}</td>
+                          <td className="px-5 py-3 text-xs text-muted-foreground">{l.detail ?? "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
 

@@ -1,5 +1,6 @@
 import { WalletModel } from '../models/WalletModel.js';
 import { WithdrawalModel } from '../models/WithdrawalModel.js';
+import { ExpertModel } from '../models/ExpertModel.js';
 import { BadRequest, Forbidden } from '../errors.js';
 
 const MAX_TOPUP = 50000;
@@ -34,8 +35,15 @@ export const walletController = {
 
   async withdrawals(req, res) {
     const { expertId } = req.params;
-    if (req.user.id !== expertId && req.user.role !== 'ADMIN') throw Forbidden();
+    if (req.user.id !== expertId && req.user.role !== 'ADMIN' && req.user.role !== 'SUPER_ADMIN') throw Forbidden();
     res.json(await WithdrawalModel.listForExpert(expertId));
+  },
+
+  // Per-job earnings history (who booked, what, how much earned).
+  async earnings(req, res) {
+    const { expertId } = req.params;
+    if (req.user.id !== expertId && req.user.role !== 'ADMIN' && req.user.role !== 'SUPER_ADMIN') throw Forbidden();
+    res.json(await ExpertModel.earningsHistory(expertId));
   },
 
   // Customer prepaid wallet — balance + recent ledger.

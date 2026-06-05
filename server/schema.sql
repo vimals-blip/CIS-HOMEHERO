@@ -475,3 +475,20 @@ CREATE TABLE IF NOT EXISTS device_tokens (
   CONSTRAINT fk_device_tokens_user FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE,
   INDEX idx_device_tokens_user (user_id)
 );
+
+-- ----------------------------------------------------------------------------
+-- Audit log — who did what (persistent; actor kept even if user later deleted)
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id VARCHAR(50) NOT NULL PRIMARY KEY,
+  actor_id VARCHAR(50),
+  actor_email VARCHAR(255),
+  actor_role VARCHAR(20),
+  action VARCHAR(80) NOT NULL,
+  entity_type VARCHAR(50),
+  entity_id VARCHAR(50),
+  detail VARCHAR(500),
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_audit_created (created_at),
+  INDEX idx_audit_actor (actor_id)
+);

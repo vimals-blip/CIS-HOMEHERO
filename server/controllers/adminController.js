@@ -5,6 +5,9 @@ import { UserModel } from '../models/UserModel.js';
 import { CouponModel } from '../models/CouponModel.js';
 import { WithdrawalModel } from '../models/WithdrawalModel.js';
 import { WalletModel } from '../models/WalletModel.js';
+import { AuditModel } from '../models/AuditModel.js';
+import bcrypt from 'bcryptjs';
+import { audit } from '../services/auditService.js';
 import { BadRequest, Conflict, NotFound } from '../errors.js';
 
 export const adminController = {
@@ -87,6 +90,9 @@ export const adminController = {
     if (typeof is_blocked === 'boolean') {
       if (req.params.userId === req.user.id) throw BadRequest('SELF', 'You cannot block your own account.');
       await UserModel.setBlocked(req.params.userId, is_blocked);
+      audit(req, is_blocked ? 'USER_BLOCKED' : 'USER_UNBLOCKED', { entityType: 'user', entityId: req.params.userId, detail: user.email });
+    } else {
+      audit(req, 'USER_UPDATED', { entityType: 'user', entityId: req.params.userId, detail: user.email });
     }
     res.json({ status: 'updated' });
   },
@@ -99,7 +105,32 @@ export const adminController = {
     const roles = await UserModel.getRoles(req.params.userId);
     if (roles.includes('SUPER_ADMIN')) throw BadRequest('PROTECTED', 'Cannot delete a super admin.');
     await UserModel.remove(req.params.userId);
+    audit(req, 'USER_DELETED', { entityType: 'user', entityId: req.params.userId, detail: user.email });
     res.json({ status: 'deleted' });
+  },
+
+  // Admin resets a user's password. Accepts an explicit new_password or
+  // generates a temporary one that is returned ONCE for the admin to relay.
+  async resetPassword(req, res) {
+    const user = await UserModel.findById(req.params.userId);
+    if (!user) throw NotFound('User not found.');
+    const roles = await UserModel.getRoles(req.params.userId);
+    // Only a super-admin may reset another admin/super-admin's password.
+    if ((roles.includes('ADMIN') || roles.includes('SUPER_ADMIN')) && req.user.role !== 'SUPER_ADMIN') {
+      throw BadRequest('FORBIDDEN', 'Only a super admin can reset an admin password.');
+    }
+    let pwd = req.body.new_password;
+    let generated = false;
+    if (!pwd) { pwd = 'Hh' + Math.random().toString(36).slice(2, 8) + '!'; generated = true; }
+    if (pwd.length < 6) throw BadRequest('WEAK_PASSWORD', 'Password must be at least 6 characters.');
+    await UserModel.setPassword(req.params.userId, await bcrypt.hash(pwd, 10));
+    audit(req, 'PASSWORD_RESET', { entityType: 'user', entityId: req.params.userId, detail: user.email });
+    res.json({ status: 'reset', temp_password: generated ? pwd : undefined });
+  },
+
+  async getAuditLogs(req, res) {
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 100));
+    res.json(await AuditModel.list({ limit, action: req.query.action }));
   },
 
   async getBookings(req, res) {
@@ -144,6 +175,7 @@ export const adminController = {
     if (!target) throw BadRequest('MISSING_FIELDS', 'user_id or email is required.');
     if (target === req.user.id) throw BadRequest('SELF', 'You cannot change your own role.');
     await UserModel.setRole(target, role);
+    audit(req, 'ROLE_CHANGED', { entityType: 'user', entityId: target, detail: `→ ${role}` });
     res.json({ status: 'updated', user_id: target, role });
   },
 
@@ -167,6 +199,7 @@ export const adminController = {
       await WalletModel.creditExpertAvailable(wd.expert_id, Number(wd.amount));
     }
     await WithdrawalModel.setStatus(req.params.id, next);
+    audit(req, `WITHDRAWAL_${next}`, { entityType: 'withdrawal', entityId: req.params.id, detail: `₹${wd.amount} · expert ${wd.expert_id}` });
     res.json({ status: 'updated', withdrawal_status: next });
   },
 

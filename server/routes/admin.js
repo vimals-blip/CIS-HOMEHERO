@@ -19,8 +19,11 @@ router.get('/experts',       asyncHandler(adminController.getExperts));
 router.get('/users',          asyncHandler(adminController.getUsers));
 router.get('/users/:userId',  asyncHandler(adminController.getUserDetail));
 router.patch('/users/:userId', asyncHandler(adminController.updateUser));
+router.post('/users/:userId/reset-password', asyncHandler(adminController.resetPassword));
 // Hard delete is destructive → super-admin only.
 router.delete('/users/:userId', superAdmin, asyncHandler(adminController.deleteUser));
+// Audit trail — super-admin only.
+router.get('/audit-logs', superAdmin, asyncHandler(adminController.getAuditLogs));
 router.get('/bookings',      asyncHandler(adminController.getBookings));
 router.post('/coupons',      asyncHandler(adminController.createCoupon));
 router.patch('/coupons/:id', asyncHandler(adminController.toggleCoupon));

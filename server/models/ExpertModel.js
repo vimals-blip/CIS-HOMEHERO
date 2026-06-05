@@ -81,6 +81,21 @@ export const ExpertModel = {
     return rows ?? [];
   },
 
+  // Completed-job earnings ledger: who booked, what service, how much earned.
+  async earningsHistory(expertId, limit = 50) {
+    const [rows] = await pool.query(
+      `SELECT b.id, b.total_amount, b.expert_amount, b.completed_at, b.created_at,
+        s.name AS service_name, cust.name AS customer_name
+       FROM bookings b
+       LEFT JOIN services s ON s.id = b.service_id
+       LEFT JOIN profiles cust ON cust.id = b.customer_id
+       WHERE b.expert_id = ? AND b.status = 'COMPLETED'
+       ORDER BY b.completed_at DESC, b.created_at DESC LIMIT ?`,
+      [expertId, limit],
+    );
+    return (rows ?? []).map((r) => ({ ...r, total_amount: Number(r.total_amount), expert_amount: Number(r.expert_amount) }));
+  },
+
   async setStatus(id, status) {
     await pool.query('UPDATE experts SET status = ? WHERE id = ?', [status, id]);
   },

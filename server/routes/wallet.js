@@ -8,6 +8,7 @@ const router = Router();
 router.use(authMiddleware);
 
 router.get('/:expertId',             asyncHandler(walletController.get));
+router.get('/:expertId/earnings',    asyncHandler(walletController.earnings));
 router.get('/:expertId/withdrawals', asyncHandler(walletController.withdrawals));
 router.post('/:expertId/withdraw',   asyncHandler(walletController.withdraw));
 
