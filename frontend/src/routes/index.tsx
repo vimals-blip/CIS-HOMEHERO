@@ -90,9 +90,16 @@ function Home() {
 
       {/* Services */}
       <section id="services" className="container mx-auto scroll-mt-20 px-4 py-16">
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold md:text-3xl">What do you need help with?</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Pick a service and book by the hour</p>
+        <div className="mb-8 flex items-end justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-bold md:text-3xl">What do you need help with?</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Pick a service and book by the hour</p>
+          </div>
+          {!isLoading && (services as any[]).length > 0 && (
+            <span className="hidden shrink-0 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary sm:inline-block">
+              {(services as any[]).length} services
+            </span>
+          )}
         </div>
         {isLoading ? (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
@@ -138,16 +145,22 @@ function Home() {
       {/* How it works */}
       <section className="border-y bg-muted/30">
         <div className="container mx-auto px-4 py-16">
-          <h2 className="text-center text-2xl font-bold md:text-3xl">How it works</h2>
-          <div className="mx-auto mt-10 grid max-w-4xl gap-6 md:grid-cols-3">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold md:text-3xl">How it works</h2>
+            <p className="mt-2 text-sm text-muted-foreground">Help at your doorstep in three simple steps</p>
+          </div>
+          <div className="relative mx-auto mt-10 grid max-w-4xl gap-6 md:grid-cols-3">
+            {/* connecting line on desktop */}
+            <div className="absolute left-0 right-0 top-9 hidden h-px bg-gradient-to-r from-transparent via-border to-transparent md:block" />
             {[
               { icon: Sparkles, title: "Pick a service", desc: "Choose what you need help with" },
               { icon: Clock, title: "Choose duration", desc: "Book instantly or schedule for later" },
               { icon: ShieldCheck, title: "Expert arrives", desc: "Track your verified expert in real time" },
-            ].map((s) => (
-              <div key={s.title} className="rounded-2xl border bg-card p-6 text-center">
-                <div className="mx-auto grid h-12 w-12 place-items-center rounded-xl bg-primary text-primary-foreground">
+            ].map((s, i) => (
+              <div key={s.title} className="relative rounded-2xl border bg-card p-6 text-center transition-shadow hover:shadow-md">
+                <div className="relative mx-auto grid h-12 w-12 place-items-center rounded-xl bg-primary text-primary-foreground shadow-md shadow-primary/30">
                   <s.icon className="h-5 w-5" />
+                  <span className="absolute -right-2 -top-2 grid h-6 w-6 place-items-center rounded-full bg-white text-xs font-bold text-primary ring-2 ring-primary/20">{i + 1}</span>
                 </div>
                 <h3 className="mt-4 font-semibold">{s.title}</h3>
                 <p className="mt-1 text-sm text-muted-foreground">{s.desc}</p>
