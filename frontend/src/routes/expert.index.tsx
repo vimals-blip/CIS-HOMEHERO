@@ -51,7 +51,7 @@ function ExpertDashboard() {
   useEffect(() => {
     if (!loading) {
       if (!user) router.navigate({ to: "/auth/login" });
-      else if (role && role !== "EXPERT" && role !== "ADMIN") router.navigate({ to: "/" });
+      else if (role && role !== "EXPERT" && role !== "ADMIN" && role !== "SUPER_ADMIN") router.navigate({ to: "/" });
     }
   }, [user, role, loading, router]);
 

@@ -1,7 +1,9 @@
 # HomeHero — Admin Guide
 
 Everything the back-office can do, who can do it, and how it's verified. The
-admin console lives at **`/admin`** (sign in, then it's in the left sidebar).
+admin console lives at **`/admin`**. After login, ADMIN and SUPER_ADMIN users
+land on `/admin` automatically (customers land on home, experts on their
+dashboard), and the navbar shows the admin menu.
 
 ## Roles
 

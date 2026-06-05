@@ -37,7 +37,8 @@ export function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const currentPath = useRouterState().location.pathname;
 
-  const links = role === "ADMIN" ? adminLinks : role === "EXPERT" ? expertLinks : customerLinks;
+  const isAdmin = role === "ADMIN" || role === "SUPER_ADMIN";
+  const links = isAdmin ? adminLinks : role === "EXPERT" ? expertLinks : customerLinks;
 
   // Pull profile (name + avatar) for the user menu.
   const { data: me } = useQuery({

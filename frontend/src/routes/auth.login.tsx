@@ -41,7 +41,10 @@ function Login() {
     if (!result?.accessToken) throw new Error("Login failed: invalid server response.");
     setTokens(result.accessToken, result.refreshToken);
     toast.success("Welcome back!");
-    navigate({ to: "/" });
+    // Land each role on its home surface.
+    const role = result.user?.role;
+    const dest = role === "ADMIN" || role === "SUPER_ADMIN" ? "/admin" : role === "EXPERT" ? "/expert" : "/";
+    navigate({ to: dest });
   };
 
   const submitPassword = async (e: React.FormEvent) => {
