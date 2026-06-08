@@ -1,9 +1,12 @@
 import dotenv from 'dotenv';
 import http from 'node:http';
 import express from 'express';
+import helmet from 'helmet';
+import compression from 'compression';
 import pool from './db.js';
 import { corsMiddleware } from './middleware/cors.js';
 import { sanitizeBody } from './middleware/sanitize.js';
+import { apiLimiter } from './middleware/rateLimit.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { initRealtime } from './realtime/io.js';
 
@@ -22,6 +25,7 @@ import supportRoutes from './routes/support.js';
 import cmsRoutes from './routes/cms.js';
 import notificationRoutes from './routes/notifications.js';
 import adminRoutes from './routes/admin.js';
+import uploadRoutes, { UPLOAD_ROOT } from './routes/uploads.js';
 
 dotenv.config({ path: new URL('../.env', import.meta.url).pathname });
 
@@ -35,12 +39,18 @@ if (process.env.NODE_ENV === 'production' &&
 const BASE = process.env.API_BASE_PATH || '/api/v1';
 const app = express();
 
+// Behind the gateway + nginx in production, so trust the proxy chain for
+// correct req.ip (rate limiting) and protocol detection.
+app.set('trust proxy', Number(process.env.TRUST_PROXY ?? 1));
+
+app.use(helmet());
+app.use(compression());
 app.use(corsMiddleware);
 app.options('*', corsMiddleware);
-app.use(express.json());
+app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '1mb' }));
 app.use(sanitizeBody);
 
-// Health check
+// Health check — exempt from rate limiting so load balancers can probe freely.
 app.get(`${BASE}/health`, async (_req, res) => {
   try {
     await pool.query('SELECT 1');
@@ -49,6 +59,15 @@ app.get(`${BASE}/health`, async (_req, res) => {
     res.status(503).json({ status: 'degraded', db: 'unreachable' });
   }
 });
+
+// Serve locally-stored uploads (KYC docs etc.) when not using S3.
+// crossOriginResourcePolicy is relaxed so the frontend origin can load them.
+app.use('/uploads', express.static(UPLOAD_ROOT, {
+  setHeaders: (res) => res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin'),
+}));
+
+// Broad API rate limit (after health so probes are never throttled).
+app.use(BASE, apiLimiter);
 
 // Route modules
 app.use(`${BASE}/auth`, authRoutes);
@@ -66,6 +85,7 @@ app.use(`${BASE}/support`, supportRoutes);
 app.use(`${BASE}/cms`, cmsRoutes);
 app.use(`${BASE}/notifications`, notificationRoutes);
 app.use(`${BASE}/admin`, adminRoutes);
+app.use(`${BASE}/uploads`, uploadRoutes);
 
 // Global error handler — must be last
 app.use(errorHandler);
@@ -85,3 +105,20 @@ server.listen(port, () => {
   }
   throw error;
 });
+
+// Graceful shutdown — stop accepting connections, drain in-flight requests,
+// then close the DB pool. Lets PM2/Docker restart without dropping requests.
+let shuttingDown = false;
+function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`${signal} received — shutting down gracefully...`);
+  server.close(async () => {
+    try { await pool.end(); } catch { /* ignore */ }
+    process.exit(0);
+  });
+  // Hard limit so a hung connection can't block the restart forever.
+  setTimeout(() => process.exit(1), 10_000).unref();
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

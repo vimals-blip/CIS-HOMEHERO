@@ -26,6 +26,27 @@ export function initRealtime(server) {
     cors: { origin: true, methods: ['GET', 'POST'], credentials: true },
   });
 
+  // Horizontal scaling: when REDIS_URL is set, attach the Redis adapter so
+  // emits fan out across every API instance (PM2 cluster / multiple nodes).
+  // Without it, a socket connected to instance A never receives an event
+  // emitted from instance B. Falls back to single-instance mode when unset.
+  if (process.env.REDIS_URL) {
+    (async () => {
+      try {
+        const [{ createAdapter }, { default: Redis }] = await Promise.all([
+          import('@socket.io/redis-adapter'),
+          import('ioredis'),
+        ]);
+        const pubClient = new Redis(process.env.REDIS_URL);
+        const subClient = pubClient.duplicate();
+        io.adapter(createAdapter(pubClient, subClient));
+        console.log('Socket.IO: Redis adapter attached (multi-instance fan-out enabled)');
+      } catch (err) {
+        console.error('Socket.IO Redis adapter failed, staying single-instance:', err?.message);
+      }
+    })();
+  }
+
   // Authenticate every socket with the access JWT from the handshake.
   io.use((socket, next) => {
     const token = socket.handshake.auth?.token || socket.handshake.query?.token;

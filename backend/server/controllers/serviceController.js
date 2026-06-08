@@ -1,5 +1,8 @@
 import { ServiceModel } from '../models/ServiceModel.js';
+import { bustCache } from '../middleware/cache.js';
 import { BadRequest, NotFound } from '../errors.js';
+
+const SERVICES_CACHE_PREFIX = `${process.env.API_BASE_PATH || '/api/v1'}/services`;
 
 function format(row) {
   return {
@@ -42,6 +45,7 @@ export const serviceController = {
       name, slug, tagline, description, iconName: icon_name, imageUrl: image_url,
       ratePerHour: rate_per_hour, minHours: min_hours, sortOrder: sort_order,
     });
+    await bustCache(SERVICES_CACHE_PREFIX);
     res.status(201).json({ id });
   },
 
@@ -55,6 +59,7 @@ export const serviceController = {
       imageUrl: b.image_url, ratePerHour: b.rate_per_hour, minHours: b.min_hours,
       sortOrder: b.sort_order, isActive: b.is_active === undefined ? undefined : Number(b.is_active),
     });
+    await bustCache(SERVICES_CACHE_PREFIX);
     res.json({ status: 'updated' });
   },
 };

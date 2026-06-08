@@ -10,7 +10,10 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as WalletRouteImport } from './routes/wallet'
+import { Route as TermsRouteImport } from './routes/terms'
 import { Route as SupportRouteImport } from './routes/support'
+import { Route as RefundRouteImport } from './routes/refund'
+import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as BookingsRouteImport } from './routes/bookings'
 import { Route as AccountRouteImport } from './routes/account'
 import { Route as IndexRouteImport } from './routes/index'
@@ -28,9 +31,24 @@ const WalletRoute = WalletRouteImport.update({
   path: '/wallet',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SupportRoute = SupportRouteImport.update({
   id: '/support',
   path: '/support',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RefundRoute = RefundRouteImport.update({
+  id: '/refund',
+  path: '/refund',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BookingsRoute = BookingsRouteImport.update({
@@ -93,7 +111,10 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/account': typeof AccountRoute
   '/bookings': typeof BookingsRoute
+  '/privacy': typeof PrivacyRoute
+  '/refund': typeof RefundRoute
   '/support': typeof SupportRoute
+  '/terms': typeof TermsRoute
   '/wallet': typeof WalletRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup-customer': typeof AuthSignupCustomerRoute
@@ -108,7 +129,10 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/account': typeof AccountRoute
   '/bookings': typeof BookingsRoute
+  '/privacy': typeof PrivacyRoute
+  '/refund': typeof RefundRoute
   '/support': typeof SupportRoute
+  '/terms': typeof TermsRoute
   '/wallet': typeof WalletRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup-customer': typeof AuthSignupCustomerRoute
@@ -124,7 +148,10 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/account': typeof AccountRoute
   '/bookings': typeof BookingsRoute
+  '/privacy': typeof PrivacyRoute
+  '/refund': typeof RefundRoute
   '/support': typeof SupportRoute
+  '/terms': typeof TermsRoute
   '/wallet': typeof WalletRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup-customer': typeof AuthSignupCustomerRoute
@@ -141,7 +168,10 @@ export interface FileRouteTypes {
     | '/'
     | '/account'
     | '/bookings'
+    | '/privacy'
+    | '/refund'
     | '/support'
+    | '/terms'
     | '/wallet'
     | '/auth/login'
     | '/auth/signup-customer'
@@ -156,7 +186,10 @@ export interface FileRouteTypes {
     | '/'
     | '/account'
     | '/bookings'
+    | '/privacy'
+    | '/refund'
     | '/support'
+    | '/terms'
     | '/wallet'
     | '/auth/login'
     | '/auth/signup-customer'
@@ -171,7 +204,10 @@ export interface FileRouteTypes {
     | '/'
     | '/account'
     | '/bookings'
+    | '/privacy'
+    | '/refund'
     | '/support'
+    | '/terms'
     | '/wallet'
     | '/auth/login'
     | '/auth/signup-customer'
@@ -187,7 +223,10 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AccountRoute: typeof AccountRoute
   BookingsRoute: typeof BookingsRoute
+  PrivacyRoute: typeof PrivacyRoute
+  RefundRoute: typeof RefundRoute
   SupportRoute: typeof SupportRoute
+  TermsRoute: typeof TermsRoute
   WalletRoute: typeof WalletRoute
   AuthLoginRoute: typeof AuthLoginRoute
   AuthSignupCustomerRoute: typeof AuthSignupCustomerRoute
@@ -208,11 +247,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WalletRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/support': {
       id: '/support'
       path: '/support'
       fullPath: '/support'
       preLoaderRoute: typeof SupportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/refund': {
+      id: '/refund'
+      path: '/refund'
+      fullPath: '/refund'
+      preLoaderRoute: typeof RefundRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/bookings': {
@@ -299,7 +359,10 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AccountRoute: AccountRoute,
   BookingsRoute: BookingsRoute,
+  PrivacyRoute: PrivacyRoute,
+  RefundRoute: RefundRoute,
   SupportRoute: SupportRoute,
+  TermsRoute: TermsRoute,
   WalletRoute: WalletRoute,
   AuthLoginRoute: AuthLoginRoute,
   AuthSignupCustomerRoute: AuthSignupCustomerRoute,

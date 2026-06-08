@@ -4,6 +4,8 @@
 // shared MySQL) — the first service peeled off via the strangler pattern.
 import dotenv from 'dotenv';
 import express from 'express';
+import helmet from 'helmet';
+import compression from 'compression';
 import pool from '../../server/db.js';
 import { corsMiddleware } from '../../server/middleware/cors.js';
 import { sanitizeBody } from '../../server/middleware/sanitize.js';
@@ -16,8 +18,14 @@ dotenv.config();
 const BASE = process.env.API_BASE_PATH || '/api/v1';
 const app = express();
 
+// Trust the gateway/nginx proxy chain so req.ip is the real client (the
+// auth rate limiters in routes/auth.js key on it).
+app.set('trust proxy', Number(process.env.TRUST_PROXY ?? 1));
+
+app.use(helmet());
+app.use(compression());
 app.use(corsMiddleware);
-app.use(express.json());
+app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '1mb' }));
 app.use(sanitizeBody);
 
 app.get(`${BASE}/health`, async (_req, res) => {

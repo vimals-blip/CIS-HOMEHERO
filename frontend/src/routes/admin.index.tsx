@@ -5,7 +5,7 @@ import {
   LayoutDashboard, ShieldCheck, Users, Briefcase, Tag, Ticket,
   CheckCircle2, XCircle, Plus, RefreshCw, Search, IndianRupee,
   Star, BookOpen, Circle, AlertCircle, Wallet, LifeBuoy, Settings as SettingsIcon, Send, ArrowLeft,
-  ScrollText, KeyRound,
+  ScrollText, KeyRound, FileText, ExternalLink,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -533,27 +533,89 @@ function AdminDashboard() {
 
               {/* KYC document review dialog */}
               <Dialog open={!!docsExpert} onOpenChange={(o) => !o && setDocsExpert(null)}>
-                <DialogContent className="max-w-lg">
-                  <DialogHeader><DialogTitle>Documents — {docsExpert?.name}</DialogTitle></DialogHeader>
-                  {docsLoading ? <LoadingSpinner /> : (expertDocs as any[]).length === 0 ? (
-                    <p className="py-6 text-center text-sm text-muted-foreground">No documents submitted yet.</p>
+                <DialogContent className="max-w-xl">
+                  <DialogHeader>
+                    <DialogTitle>Documents — {docsExpert?.name}</DialogTitle>
+                  </DialogHeader>
+                  {docsLoading ? (
+                    <div className="py-8"><LoadingSpinner /></div>
+                  ) : (expertDocs as any[]).length === 0 ? (
+                    <p className="py-8 text-center text-sm text-muted-foreground">No documents submitted yet.</p>
                   ) : (
-                    <div className="space-y-3">
-                      {(expertDocs as any[]).map((d) => (
-                        <div key={d.id} className="flex items-center justify-between gap-3 rounded-xl border p-3">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2 text-sm font-medium">{d.type}
-                              <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold",
-                                d.status === "APPROVED" ? "bg-emerald-100 text-emerald-700" : d.status === "REJECTED" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700")}>{d.status}</span>
+                    <div className="mt-1 space-y-3">
+                      {(expertDocs as any[]).map((d) => {
+                        const isPdf = /\.pdf($|\?)/i.test(d.file_url ?? "");
+                        const statusCls =
+                          d.status === "APPROVED" ? "bg-emerald-100 text-emerald-700" :
+                          d.status === "REJECTED"  ? "bg-red-100 text-red-700" :
+                                                     "bg-amber-100 text-amber-700";
+                        return (
+                          <div key={d.id} className="overflow-hidden rounded-xl border">
+                            {/* Preview */}
+                            <div className="relative h-40 w-full bg-muted">
+                              {isPdf ? (
+                                <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
+                                  <FileText className="h-10 w-10" />
+                                  <span className="text-xs font-medium">PDF document</span>
+                                </div>
+                              ) : d.file_url ? (
+                                <img src={d.file_url} alt={d.type} className="h-full w-full object-contain bg-muted" />
+                              ) : (
+                                <div className="flex h-full items-center justify-center text-xs text-muted-foreground">No file</div>
+                              )}
+                              {d.file_url && (
+                                <a
+                                  href={d.file_url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="absolute right-2 top-2 flex items-center gap-1 rounded-md bg-white/90 px-2 py-1 text-[10px] font-medium text-foreground shadow hover:bg-white"
+                                >
+                                  <ExternalLink className="h-3 w-3" /> View full
+                                </a>
+                              )}
                             </div>
-                            <a href={d.file_url} target="_blank" rel="noreferrer" className="truncate text-xs text-primary hover:underline">{d.file_url}</a>
+
+                            {/* Info + actions */}
+                            <div className="flex items-center justify-between gap-3 px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-semibold">{d.type}</span>
+                                <span className={cn("rounded-full px-2.5 py-0.5 text-[10px] font-semibold", statusCls)}>
+                                  {d.status}
+                                </span>
+                              </div>
+                              {d.status !== "APPROVED" && (
+                                <div className="flex shrink-0 gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 border-red-200 text-red-600 hover:bg-red-50"
+                                    disabled={reviewDoc.isPending}
+                                    onClick={() => reviewDoc.mutate({ docId: d.id, status: "REJECTED" })}
+                                  >
+                                    Reject
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    className="h-7 bg-emerald-600 text-white hover:bg-emerald-700"
+                                    disabled={reviewDoc.isPending}
+                                    onClick={() => reviewDoc.mutate({ docId: d.id, status: "APPROVED" })}
+                                  >
+                                    Approve
+                                  </Button>
+                                </div>
+                              )}
+                              {d.status === "APPROVED" && (
+                                <span className="flex items-center gap-1 text-xs text-emerald-600 font-medium">
+                                  <CheckCircle2 className="h-3.5 w-3.5" /> Approved
+                                </span>
+                              )}
+                            </div>
+                            {d.review_note && (
+                              <p className="border-t px-4 py-2 text-xs text-muted-foreground">Note: {d.review_note}</p>
+                            )}
                           </div>
-                          <div className="flex shrink-0 gap-1.5">
-                            <Button size="sm" variant="outline" className="h-7 border-red-200 text-red-600 hover:bg-red-50" onClick={() => reviewDoc.mutate({ docId: d.id, status: "REJECTED" })}>Reject</Button>
-                            <Button size="sm" className="h-7 bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => reviewDoc.mutate({ docId: d.id, status: "APPROVED" })}>Approve</Button>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </DialogContent>

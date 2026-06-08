@@ -134,7 +134,7 @@ function WalletPage() {
             <Plus className="mr-1 h-4 w-4" /> {topUp.isPending ? "Adding…" : "Add"}
           </Button>
         </div>
-        <p className="mt-2 text-xs text-muted-foreground">Demo top-up credits instantly. Real Razorpay checkout arrives in a later update.</p>
+        <p className="mt-2 text-xs text-muted-foreground">Wallet credits can be used for any booking. Add money once, pay instantly every time.</p>
       </div>
 
       {/* Transactions */}

@@ -36,3 +36,6 @@ dist-ssr
 .env
 .env.local
 .env.*.local
+
+# Locally-stored uploads (KYC docs etc.) — use S3 in production
+backend/uploads/

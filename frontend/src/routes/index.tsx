@@ -1,13 +1,15 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import {
   Clock, ShieldCheck, BadgeCheck, Star, ArrowRight, Quote,
-  Sparkles, Users, Heart, Zap,
+  Sparkles, Users, Heart, Zap, ChevronDown, Download, MessageCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/api";
 import { serviceIcon } from "@/lib/icons";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { BannerSlider, type Slide } from "@/components/home/BannerSlider";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
@@ -20,13 +22,59 @@ export const Route = createFileRoute("/")({
   component: Home,
 });
 
-const CITIES = ["Bengaluru", "Mumbai", "Delhi", "Hyderabad", "Pune", "Gurugram", "Noida", "Thane"];
+const CITIES = ["Bengaluru", "Mumbai", "Delhi", "Hyderabad", "Pune", "Gurugram", "Noida", "Thane", "Chennai", "Kolkata", "Ahmedabad", "Jaipur"];
 
-const HERO_IMAGES = [
-  "https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=400&q=70",
-  "https://images.unsplash.com/photo-1527515637462-cff94eecc1ac?auto=format&fit=crop&w=400&q=70",
-  "https://images.unsplash.com/photo-1556911220-bff31c812dba?auto=format&fit=crop&w=400&q=70",
+const FAQS = [
+  { q: "How quickly does an expert arrive?", a: "In most areas, a verified expert arrives within 10 minutes of booking confirmation. Scheduled bookings guarantee your chosen time slot." },
+  { q: "Are the experts background-verified?", a: "Yes. Every expert goes through Aadhaar and PAN verification before joining. We also run continuous quality checks and review every booking." },
+  { q: "What if I'm not happy with the service?", a: "Report the issue within 24 hours through the app. We'll investigate and, if warranted, issue a full refund or send another expert at no extra cost — no questions asked." },
+  { q: "Can I book a recurring service?", a: "Absolutely. After a booking is completed, you can rebook the same expert and set a recurring schedule (daily, weekly, or custom) directly from the app." },
+  { q: "How do I pay?", a: "We accept all major cards, UPI (GPay, PhonePe, Paytm), net banking, and HomeHero Wallet credits. Payment is collected at booking; no cash needed." },
+  { q: "What happens if I need to cancel?", a: "Cancel free of charge up to 30 minutes before your scheduled start time. Cancellations closer to the start time may incur a small fee. See our Cancellation & Refund Policy for details." },
+  { q: "How do I become a HomeHero expert?", a: "Click 'Become an expert', complete your profile, upload your Aadhaar and PAN, and our team will verify and onboard you — usually within 48 hours." },
 ];
+
+// Built-in showcase slides — used when no CMS banners are configured.
+const HERO_SLIDES: Slide[] = [
+  {
+    image_url: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=1400&q=75",
+    title: "Sparkling clean homes, on demand",
+    subtitle: "Trained, verified experts at your door in ~10 minutes.",
+  },
+  {
+    image_url: "https://images.unsplash.com/photo-1556911220-bff31c812dba?auto=format&fit=crop&w=1400&q=75",
+    title: "Kitchen & dishwashing help",
+    subtitle: "Hand over the mess — book by the hour, instant or scheduled.",
+  },
+  {
+    image_url: "https://images.unsplash.com/photo-1545173168-9f1947eebb7f?auto=format&fit=crop&w=1400&q=75",
+    title: "Laundry, folded and sorted",
+    subtitle: "Reliable help for the chores you'd rather skip.",
+  },
+  {
+    image_url: "https://images.unsplash.com/photo-1466637574441-749b8f19452f?auto=format&fit=crop&w=1400&q=75",
+    title: "Home-style cooking assistance",
+    subtitle: "Fresh meals prepped by trained kitchen experts.",
+  },
+];
+
+function FaqItem({ q, a }: { q: string; a: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="border-b last:border-b-0">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-4 py-4 text-left text-sm font-medium hover:text-primary transition-colors"
+      >
+        {q}
+        <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200", open && "rotate-180")} />
+      </button>
+      <div className={cn("overflow-hidden transition-all duration-300", open ? "max-h-40 pb-4" : "max-h-0")}>
+        <p className="text-sm text-muted-foreground leading-relaxed">{a}</p>
+      </div>
+    </div>
+  );
+}
 
 function Home() {
   const { data: services = [], isLoading } = useQuery({
@@ -38,10 +86,15 @@ function Home() {
     queryKey: ["banners"],
     queryFn: () => apiFetch("/cms/banners"),
   });
-  // Use CMS banner images when configured; otherwise the built-in showcase.
-  const heroImages = (banners as any[]).length > 0
-    ? (banners as any[]).map((b) => b.image_url)
-    : HERO_IMAGES;
+  // Use CMS banners when configured; otherwise the built-in showcase slides.
+  const slides: Slide[] = (banners as any[]).length > 0
+    ? (banners as any[]).map((b) => ({
+        image_url: b.image_url,
+        title: b.title,
+        subtitle: b.subtitle,
+        link_url: b.link_url,
+      }))
+    : HERO_SLIDES;
 
   return (
     <div>
@@ -77,13 +130,9 @@ function Home() {
             </div>
           </div>
 
-          {/* Hero image strip */}
-          <div className="mx-auto mt-12 grid max-w-4xl grid-cols-3 gap-3 sm:gap-4">
-            {heroImages.slice(0, 3).map((src: string, i: number) => (
-              <div key={i} className={cn("overflow-hidden rounded-2xl border border-white/10 shadow-xl", i === 1 && "mt-6")}>
-                <img src={src} alt="" loading="lazy" className="h-32 w-full object-cover sm:h-44" />
-              </div>
-            ))}
+          {/* Hero slider */}
+          <div className="mx-auto mt-12 max-w-4xl">
+            <BannerSlider slides={slides} />
           </div>
         </div>
       </section>
@@ -251,6 +300,46 @@ function Home() {
               </div>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section className="container mx-auto max-w-3xl px-4 py-16">
+        <div className="text-center mb-10">
+          <h2 className="text-2xl font-bold md:text-3xl">Frequently asked questions</h2>
+          <p className="mt-2 text-sm text-muted-foreground">Everything you need to know about HomeHero</p>
+        </div>
+        <div className="rounded-2xl border bg-card px-6">
+          {FAQS.map((f) => <FaqItem key={f.q} q={f.q} a={f.a} />)}
+        </div>
+        <div className="mt-6 text-center text-sm text-muted-foreground">
+          Still have questions?{" "}
+          <Link to="/support" className="font-medium text-primary hover:underline">
+            <MessageCircle className="inline h-3.5 w-3.5 mr-0.5" /> Contact support
+          </Link>
+        </div>
+      </section>
+
+      {/* App download strip */}
+      <section className="border-y bg-muted/30">
+        <div className="container mx-auto flex flex-col items-center justify-between gap-6 px-4 py-12 md:flex-row">
+          <div>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary mb-3">
+              <Download className="h-3.5 w-3.5" /> Available now
+            </span>
+            <h3 className="text-xl font-bold md:text-2xl">Book in seconds from the app</h3>
+            <p className="text-sm text-muted-foreground mt-1">Live Expert tracking, one-tap rebook, and exclusive app-only offers.</p>
+          </div>
+          <div className="flex gap-3 shrink-0">
+            <a href="#" className="flex items-center gap-2 rounded-xl border bg-card px-5 py-3 text-sm font-semibold transition-colors hover:border-primary/40 hover:bg-card">
+              <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" /></svg>
+              App Store
+            </a>
+            <a href="#" className="flex items-center gap-2 rounded-xl border bg-card px-5 py-3 text-sm font-semibold transition-colors hover:border-primary/40 hover:bg-card">
+              <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current"><path d="M3.18 23.76c.35.19.75.2 1.12.03l11.11-6.38-2.54-2.54-9.69 8.89zm14.6-8.41L5.57 8.73 3.18.24C2.8.07 2.36.12 2.02.37L13.84 12l3.94 3.35zm2.4-5.16L17.14 8.5 13.84 12l3.3 3.5 2.93-1.68c.83-.47.83-1.24.11-1.63zM4.29.21L3.18.24 2.02.37 2 .4l1.18 1.14L5.57 8.73 15.26 3.6 4.29.21z" /></svg>
+              Google Play
+            </a>
+          </div>
         </div>
       </section>
 

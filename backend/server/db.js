@@ -18,24 +18,34 @@ const {
   DB_USER = 'root',
   DB_PASSWORD = '',
   DB_NAME = 'homehero',
-  DB_CONNECTION_LIMIT = '10',
+  // Default raised 10→25 per process for production load. With ~4 backend
+  // processes that's ~100 connections — keep MySQL max_connections well above
+  // (processes × limit) plus headroom. Tune per instance via env.
+  DB_CONNECTION_LIMIT = '25',
 } = process.env;
 
 // dateStrings: true — returns DATE/DATETIME columns as plain strings (e.g. "2026-06-05")
 // instead of JavaScript Date objects, which get JSON-serialized to ISO UTC strings
 // and cause date-shift bugs due to timezone offset.
+const sharedPoolOpts = {
+  waitForConnections: true,
+  connectionLimit: Number(DB_CONNECTION_LIMIT),
+  queueLimit: 0, // unbounded wait queue; requests wait rather than erroring
+  enableKeepAlive: true, // keep idle TCP conns alive so they aren't silently dropped
+  keepAliveInitialDelay: 10_000,
+  decimalNumbers: true,
+  dateStrings: true,
+};
+
 const pool = DATABASE_URL
-  ? mysql.createPool({ uri: DATABASE_URL, dateStrings: true, decimalNumbers: true })
+  ? mysql.createPool({ uri: DATABASE_URL, ...sharedPoolOpts })
   : mysql.createPool({
       host: DB_HOST,
       port: Number(DB_PORT),
       user: DB_USER,
       password: DB_PASSWORD,
       database: DB_NAME,
-      waitForConnections: true,
-      connectionLimit: Number(DB_CONNECTION_LIMIT),
-      decimalNumbers: true,
-      dateStrings: true,
+      ...sharedPoolOpts,
     });
 
 export async function query(sql, params = []) {

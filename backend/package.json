@@ -18,17 +18,23 @@
     "check-env": "node server/check-env.js",
     "smoke:admin": "node scripts/admin-smoke.mjs",
     "smoke:flows": "node scripts/flows-smoke.mjs",
+    "load": "k6 run scripts/load-test.js",
     "create-admin": "node server/create-local-admin.js"
   },
   "dependencies": {
+    "@socket.io/redis-adapter": "^8.3.0",
     "bcryptjs": "^2.4.3",
     "bullmq": "^5.78.0",
+    "compression": "^1.8.1",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.3",
+    "express-rate-limit": "^8.5.2",
+    "helmet": "^8.2.0",
     "http-proxy-middleware": "^3.0.5",
     "ioredis": "^5.11.0",
     "jsonwebtoken": "^9.0.0",
+    "multer": "^2.1.1",
     "mysql2": "^3.6.0",
     "socket.io": "^4.8.3"
   },

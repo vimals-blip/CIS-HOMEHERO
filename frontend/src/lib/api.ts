@@ -63,6 +63,35 @@ async function refreshAccessToken(): Promise<string | null> {
   return token;
 }
 
+// Upload a file as multipart/form-data. Does NOT set Content-Type so the
+// browser adds the correct multipart boundary. Transparently refreshes once on 401.
+export async function uploadFile<T = any>(
+  file: File,
+  opts: { folder?: string } = {},
+  retried = false,
+): Promise<T> {
+  const qs = opts.folder ? `?folder=${encodeURIComponent(opts.folder)}` : '';
+  const form = new FormData();
+  form.append('file', file);
+
+  const token = getAccessToken();
+  const res = await fetch(`${API_BASE}/uploads${qs}`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+  });
+
+  if (res.status === 401 && !retried && getRefreshToken()) {
+    const newToken = await refreshAccessToken();
+    if (newToken) return uploadFile<T>(file, opts, true);
+    clearTokens();
+  }
+
+  const body = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(body?.message ?? body?.error ?? 'Upload failed');
+  return body as T;
+}
+
 export async function apiFetch<T = any>(
   path: string,
   options: RequestInit = {},

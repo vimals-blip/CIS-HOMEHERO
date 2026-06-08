@@ -1,5 +1,7 @@
 import { PaymentTxnModel } from '../models/PaymentTxnModel.js';
 import { WalletModel } from '../models/WalletModel.js';
+import { PaymentModel } from '../models/PaymentModel.js';
+import { BookingModel } from '../models/BookingModel.js';
 import { paymentProvider, PROVIDER } from '../providers/paymentProvider.js';
 import { BadRequest, NotFound, HttpError } from '../errors.js';
 
@@ -50,9 +52,18 @@ export const paymentController = {
     await PaymentTxnModel.markPaid(txn.id, payment_id, signature);
 
     let wallet = null;
+    let booking = null;
+
     if (txn.purpose === 'WALLET_TOPUP') {
       wallet = await WalletModel.topUp(req.user.id, Number(txn.amount), 'Wallet top-up');
+    } else if (txn.purpose === 'BOOKING' && txn.booking_id) {
+      booking = await BookingModel.findById(txn.booking_id);
+      if (booking && booking.payment_status !== 'PAID') {
+        await BookingModel.updateStatus(txn.booking_id, booking.status, { paymentStatus: 'PAID' });
+        await PaymentModel.create({ bookingId: txn.booking_id, amount: Number(txn.amount), method: 'CARD', status: 'PAID' });
+      }
     }
-    res.json({ status: 'paid', purpose: txn.purpose, wallet });
+
+    res.json({ status: 'paid', purpose: txn.purpose, wallet, booking_id: txn.booking_id ?? null });
   },
 };

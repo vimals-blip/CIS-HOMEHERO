@@ -4,6 +4,7 @@
 // lets us migrate to microservices incrementally without downtime.
 import dotenv from 'dotenv';
 import express from 'express';
+import helmet from 'helmet';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 
 dotenv.config();
@@ -17,6 +18,10 @@ const BOOKING_SERVICE = process.env.BOOKING_SERVICE_URL || 'http://localhost:410
 const MONOLITH = process.env.MONOLITH_URL || 'http://localhost:4001';
 
 const app = express();
+
+// Public edge: trust nginx in front, set baseline security headers.
+app.set('trust proxy', Number(process.env.TRUST_PROXY ?? 1));
+app.use(helmet());
 
 // Service registry: prefix → target. Order matters (most specific first).
 const ROUTES = [
@@ -34,13 +39,16 @@ app.get('/gateway/health', (_req, res) => {
 });
 
 for (const { prefix, target } of ROUTES) {
-  app.use(prefix, createProxyMiddleware({ target, changeOrigin: true, pathRewrite: (p, req) => req.originalUrl }));
+  // xfwd: forward X-Forwarded-For so downstream services see the real client IP
+  // (required for their rate limiting to key per-user, not per-gateway).
+  app.use(prefix, createProxyMiddleware({ target, changeOrigin: true, xfwd: true, pathRewrite: (p, req) => req.originalUrl }));
 }
 
 // Fallback: everything else (booking, payments, services, realtime ws…) → monolith.
 const fallback = createProxyMiddleware({
   target: MONOLITH,
   changeOrigin: true,
+  xfwd: true,
   ws: true, // proxy Socket.IO websocket upgrades
   pathRewrite: (p, req) => req.originalUrl,
 });

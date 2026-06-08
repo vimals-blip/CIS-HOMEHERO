@@ -6,13 +6,15 @@ import { AddressModel } from '../models/AddressModel.js';
 import { WalletModel } from '../models/WalletModel.js';
 import { CouponModel } from '../models/CouponModel.js';
 import { PaymentModel } from '../models/PaymentModel.js';
+import { PaymentTxnModel } from '../models/PaymentTxnModel.js';
+import { paymentProvider } from '../providers/paymentProvider.js';
 import { dispatchService } from '../services/dispatchService.js';
 import { emitToBooking } from '../realtime/io.js';
 import { notify } from '../services/notificationService.js';
 import { isAdmin } from '../middleware/auth.js';
 import { BadRequest, Forbidden, NotFound } from '../errors.js';
 
-const VALID_PAYMENT_METHODS = ['CASH', 'WALLET'];
+const VALID_PAYMENT_METHODS = ['CASH', 'WALLET', 'ONLINE'];
 
 const PLATFORM_FEE_PCT = 0.15;
 const round2 = (n) => Math.round(Number(n) * 100) / 100;
@@ -89,7 +91,7 @@ export const bookingController = {
       throw BadRequest('MISSING_SCHEDULE', 'scheduled_at is required for scheduled bookings.');
     }
     if (!VALID_PAYMENT_METHODS.includes(payment_method)) {
-      throw BadRequest('INVALID_PAYMENT_METHOD', 'payment_method must be CASH or WALLET.');
+      throw BadRequest('INVALID_PAYMENT_METHOD', 'payment_method must be CASH, WALLET, or ONLINE.');
     }
 
     const service = await ServiceModel.findById(service_id);
@@ -126,7 +128,7 @@ export const bookingController = {
     const platformFee = round2(total * PLATFORM_FEE_PCT);
     const expertAmount = round2(total - platformFee);
 
-    // Wallet payment is settled up front; cash is collected after the service.
+    // Wallet payment is settled up front; cash/online is settled after.
     const payWithWallet = payment_method === 'WALLET';
     if (payWithWallet) {
       const wallet = await WalletModel.getCustomer(req.user.id);
@@ -203,7 +205,34 @@ export const bookingController = {
       dispatchService.scheduleRetry(bookingId);
     }
 
-    res.status(201).json({ id: bookingId, status, eta_minutes: eta, total_amount: total, discount });
+    // For online payments, create a gateway order so the frontend can open Razorpay checkout.
+    let gatewayOrder = null;
+    if (payment_method === 'ONLINE' && total > 0) {
+      gatewayOrder = await paymentProvider.createOrder({ amount: total, receipt: `booking_${bookingId}` });
+      await PaymentTxnModel.create({
+        userId: req.user.id,
+        bookingId,
+        orderId: gatewayOrder.id,
+        amount: total,
+        purpose: 'BOOKING',
+        provider: gatewayOrder.provider ?? 'MOCK',
+      });
+    }
+
+    res.status(201).json({
+      id: bookingId,
+      status,
+      eta_minutes: eta,
+      total_amount: total,
+      discount,
+      ...(gatewayOrder && {
+        gateway_order_id: gatewayOrder.id,
+        gateway_amount:   gatewayOrder.amount,   // paise
+        gateway_currency: gatewayOrder.currency,
+        gateway_key_id:   gatewayOrder.key_id ?? null,
+        gateway_mock:     Boolean(gatewayOrder.mock),
+      }),
+    });
   },
 
   // Expert (or admin) advances a booking through the tracking flow.

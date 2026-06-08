@@ -1,8 +1,8 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { Wallet, Briefcase, Star, TrendingUp, Wifi, WifiOff, MapPin, Clock, ShieldAlert, BanknoteArrowDown } from "lucide-react";
-import { apiFetch } from "@/lib/api";
+import { Wallet, Briefcase, Star, TrendingUp, Wifi, WifiOff, MapPin, Clock, ShieldAlert, BanknoteArrowDown, Upload, CheckCircle2, XCircle, Clock3, FileUp, Loader2 } from "lucide-react";
+import { apiFetch, uploadFile } from "@/lib/api";
 import { getSocket } from "@/lib/socket";
 import { useAuth } from "@/lib/auth-context";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
@@ -45,8 +45,7 @@ function ExpertDashboard() {
   const [isOnline, setIsOnline] = useState<boolean | null>(null);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [wdAmount, setWdAmount] = useState("");
-  const [docType, setDocType] = useState("AADHAAR");
-  const [docUrl, setDocUrl] = useState("");
+  const [uploadingType, setUploadingType] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loading) {
@@ -145,11 +144,24 @@ function ExpertDashboard() {
     queryFn: () => apiFetch(`/experts/${user!.id}/documents`),
   });
 
-  const submitDoc = useMutation({
-    mutationFn: () => apiFetch(`/experts/${user!.id}/documents`, { method: "POST", body: JSON.stringify({ type: docType, file_url: docUrl.trim() }) }),
-    onSuccess: () => { toast.success("Document submitted for review"); setDocUrl(""); qc.invalidateQueries({ queryKey: ["documents", user?.id] }); },
-    onError: (e: any) => toast.error(e.message),
-  });
+  // Pick a file → upload it to storage → submit the returned URL as a KYC doc.
+  async function handleDocFile(type: string, file?: File | null) {
+    if (!file) return;
+    setUploadingType(type);
+    try {
+      const { file_url } = await uploadFile<{ file_url: string }>(file, { folder: `kyc/${type.toLowerCase()}` });
+      await apiFetch(`/experts/${user!.id}/documents`, {
+        method: "POST",
+        body: JSON.stringify({ type, file_url }),
+      });
+      toast.success(`${type} uploaded — pending review`);
+      qc.invalidateQueries({ queryKey: ["documents", user?.id] });
+    } catch (e: any) {
+      toast.error(e.message ?? "Upload failed");
+    } finally {
+      setUploadingType(null);
+    }
+  }
 
   if (loading || (isLoading && role === "EXPERT")) return <div className="container mx-auto px-4 py-16"><LoadingSpinner /></div>;
   if (isError) return <div className="container mx-auto max-w-lg px-4 py-20 text-center text-muted-foreground">Could not load your expert profile.</div>;
@@ -241,35 +253,69 @@ function ExpertDashboard() {
       {/* KYC documents */}
       <div className="mt-6 rounded-2xl border bg-card p-5">
         <h3 className="font-semibold">KYC documents</h3>
-        <p className="text-sm text-muted-foreground">Upload your documents to get verified and start receiving bookings.</p>
-        <div className="mt-4 grid gap-2 sm:grid-cols-3">
-          {["AADHAAR", "PAN", "SELFIE"].map((t) => {
-            const doc = (documents as any[]).find((d) => d.type === t);
-            const st = doc?.status ?? "MISSING";
-            const cls = st === "APPROVED" ? "text-emerald-600" : st === "REJECTED" ? "text-red-600" : st === "PENDING" ? "text-amber-600" : "text-muted-foreground";
+        <p className="text-sm text-muted-foreground">Upload a clear photo or PDF of each document to get verified and start receiving bookings.</p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          {([
+            { type: "AADHAAR", label: "Aadhaar card", hint: "Front & back" },
+            { type: "PAN", label: "PAN card", hint: "Clear photo" },
+            { type: "SELFIE", label: "Selfie", hint: "Face clearly visible" },
+          ] as const).map(({ type, label, hint }) => {
+            const doc = (documents as any[]).find((d) => d.type === type);
+            const st: string = doc?.status ?? "MISSING";
+            const busy = uploadingType === type;
+            const meta = {
+              APPROVED: { cls: "text-emerald-600", Icon: CheckCircle2, text: "Approved" },
+              REJECTED: { cls: "text-red-600", Icon: XCircle, text: "Rejected" },
+              PENDING: { cls: "text-amber-600", Icon: Clock3, text: "Pending review" },
+              MISSING: { cls: "text-muted-foreground", Icon: FileUp, text: "Not uploaded" },
+            }[st] ?? { cls: "text-muted-foreground", Icon: FileUp, text: st };
             return (
-              <div key={t} className="rounded-xl border bg-muted/20 p-3">
-                <div className="text-sm font-medium">{t}</div>
-                <div className={cn("text-xs font-semibold", cls)}>{st === "MISSING" ? "Not uploaded" : st}</div>
-                {doc?.review_note && <div className="mt-1 text-[11px] text-muted-foreground">{doc.review_note}</div>}
-              </div>
+              <label
+                key={type}
+                className={cn(
+                  "group relative flex cursor-pointer flex-col rounded-xl border bg-muted/20 p-3 transition-colors hover:border-primary/50",
+                  busy && "pointer-events-none opacity-70",
+                  st === "REJECTED" && "border-red-300",
+                  st === "APPROVED" && "border-emerald-300",
+                )}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="text-sm font-medium">{label}</div>
+                  <meta.Icon className={cn("h-4 w-4 shrink-0", meta.cls)} />
+                </div>
+                <div className={cn("mt-0.5 text-xs font-semibold", meta.cls)}>{meta.text}</div>
+
+                {doc?.file_url ? (
+                  <div className="mt-2 h-20 overflow-hidden rounded-lg border bg-background">
+                    {/\.pdf($|\?)/i.test(doc.file_url)
+                      ? <div className="flex h-full items-center justify-center text-xs text-muted-foreground">PDF document</div>
+                      : <img src={doc.file_url} alt={label} className="h-full w-full object-cover" />}
+                  </div>
+                ) : (
+                  <div className="mt-2 flex h-20 items-center justify-center rounded-lg border border-dashed text-xs text-muted-foreground">
+                    {hint}
+                  </div>
+                )}
+
+                <div className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-primary">
+                  {busy ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Uploading…</>
+                        : <><Upload className="h-3.5 w-3.5" /> {st === "MISSING" ? "Choose file" : "Replace"}</>}
+                </div>
+
+                {doc?.review_note && <div className="mt-1 text-[11px] text-muted-foreground">Note: {doc.review_note}</div>}
+
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,application/pdf"
+                  className="hidden"
+                  disabled={busy}
+                  onChange={(e) => { handleDocFile(type, e.target.files?.[0]); e.currentTarget.value = ""; }}
+                />
+              </label>
             );
           })}
         </div>
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <div className="flex gap-1">
-            {["AADHAAR", "PAN", "SELFIE"].map((t) => (
-              <button key={t} onClick={() => setDocType(t)} className={cn(
-                "rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors",
-                docType === t ? "border-primary bg-primary/5 text-primary" : "border-border hover:border-primary/40",
-              )}>{t}</button>
-            ))}
-          </div>
-          <Input className="flex-1 min-w-48" value={docUrl} onChange={(e) => setDocUrl(e.target.value)} placeholder="Document image URL" />
-          <Button variant="outline" disabled={submitDoc.isPending || !docUrl.trim()} onClick={() => submitDoc.mutate()}>
-            {submitDoc.isPending ? "Submitting…" : "Submit"}
-          </Button>
-        </div>
+        <p className="mt-3 text-xs text-muted-foreground">Accepted: JPG, PNG, WEBP or PDF · up to 8MB each.</p>
       </div>
 
       <Dialog open={withdrawOpen} onOpenChange={setWithdrawOpen}>

@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Zap, CalendarClock, MapPin, Plus, Check, Tag, Wallet, Banknote, X } from "lucide-react";
+import { Zap, CalendarClock, MapPin, Plus, Check, Tag, Wallet, Banknote, CreditCard, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,7 +18,9 @@ export const Route = createFileRoute("/book/$serviceId")({
   component: BookService,
 });
 
-const DURATIONS = [1, 2, 3, 4];
+const HOUR_OPTIONS = [1, 2, 3, 4];
+const DAY_OPTIONS  = [1, 2, 3, 5, 7];
+const HRS_PER_DAY  = 8;
 const PLATFORM_FEE_PCT = 0.15;
 
 // Numbered step header for the booking wizard.
@@ -39,7 +41,8 @@ function BookService() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const [duration, setDuration] = useState(1);
+  const [durationUnit, setDurationUnit] = useState<"hours" | "days">("hours");
+  const [durationValue, setDurationValue] = useState(1); // hrs or days depending on unit
   const [type, setType] = useState<"INSTANT" | "SCHEDULED">("INSTANT");
   const [scheduledAt, setScheduledAt] = useState("");
   const [selectedAddr, setSelectedAddr] = useState<string | null>(null);
@@ -47,7 +50,7 @@ function BookService() {
   const [addr, setAddr] = useState({ flat: "", address_line: "", city: "", pincode: "" });
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<"CASH" | "WALLET">("CASH");
+  const [paymentMethod, setPaymentMethod] = useState<"CASH" | "WALLET" | "ONLINE">("CASH");
   const [couponInput, setCouponInput] = useState("");
   const [coupon, setCoupon] = useState<{ code: string; discount: number } | null>(null);
   const [couponLoading, setCouponLoading] = useState(false);
@@ -73,12 +76,24 @@ function BookService() {
   if (!service) return <div className="container mx-auto px-4 py-16 text-center text-muted-foreground">Service not found.</div>;
 
   const Icon = serviceIcon(service.icon_name);
-  const base = Number(service.rate_per_hour) * duration;
+  const totalHours = durationUnit === "days" ? durationValue * HRS_PER_DAY : durationValue;
+  const base = Number(service.rate_per_hour) * totalHours;
   const discount = coupon?.discount ?? 0;
   const total = Math.max(0, base - discount);
   const platformFee = Math.round(total * PLATFORM_FEE_PCT);
   const walletBalance = Number(wallet?.balance ?? 0);
   const walletShort = paymentMethod === "WALLET" && walletBalance < total;
+
+  function loadRazorpay(): Promise<boolean> {
+    return new Promise((resolve) => {
+      if ((window as any).Razorpay) return resolve(true);
+      const s = document.createElement("script");
+      s.src = "https://checkout.razorpay.com/v1/checkout.js";
+      s.onload = () => resolve(true);
+      s.onerror = () => resolve(false);
+      document.body.appendChild(s);
+    });
+  }
 
   // Re-validate any applied coupon against the current base amount.
   const applyCoupon = async () => {
@@ -104,9 +119,8 @@ function BookService() {
     if (type === "SCHEDULED" && !scheduledAt) { toast.error("Pick a date and time"); return; }
     if (walletShort) { toast.error("Insufficient wallet balance — top up or pay with cash"); return; }
 
-    // Resolve address: saved selection or inline new address.
     let body: any = {
-      service_id: serviceId, duration_hours: duration, booking_type: type,
+      service_id: serviceId, duration_hours: totalHours, booking_type: type,
       payment_method: paymentMethod, coupon_code: coupon?.code ?? null, notes: notes.trim() || null,
     };
     if (type === "SCHEDULED") body.scheduled_at = scheduledAt.replace("T", " ") + ":00";
@@ -125,6 +139,59 @@ function BookService() {
     setSubmitting(true);
     try {
       const booking = await apiFetch("/bookings", { method: "POST", body: JSON.stringify(body) });
+
+      // ── Online payment: open Razorpay checkout ──────────────────────────────
+      if (paymentMethod === "ONLINE" && booking.gateway_order_id) {
+        if (booking.gateway_mock) {
+          // Mock mode: auto-verify without opening the modal
+          await apiFetch("/payments/verify", {
+            method: "POST",
+            body: JSON.stringify({ order_id: booking.gateway_order_id, payment_id: "pay_mock", signature: "mock_signature" }),
+          });
+          toast.success("Payment received — booking confirmed!");
+          navigate({ to: "/track/$bookingId", params: { bookingId: booking.id } });
+          return;
+        }
+
+        const loaded = await loadRazorpay();
+        if (!loaded) { toast.error("Could not load payment gateway — try again"); setSubmitting(false); return; }
+
+        new (window as any).Razorpay({
+          key: booking.gateway_key_id,
+          order_id: booking.gateway_order_id,
+          amount: booking.gateway_amount,
+          currency: booking.gateway_currency ?? "INR",
+          name: "HomeHero",
+          description: `${service.name} · ${durationUnit === "days" ? `${durationValue} day${durationValue > 1 ? "s" : ""}` : `${totalHours} hrs`}`,
+          prefill: { email: user.email },
+          theme: { color: "#7c3aed" },
+          handler: async (resp: any) => {
+            try {
+              await apiFetch("/payments/verify", {
+                method: "POST",
+                body: JSON.stringify({
+                  order_id: resp.razorpay_order_id,
+                  payment_id: resp.razorpay_payment_id,
+                  signature: resp.razorpay_signature,
+                }),
+              });
+              toast.success("Payment received — booking confirmed!");
+              navigate({ to: "/track/$bookingId", params: { bookingId: booking.id } });
+            } catch (e: any) {
+              toast.error(e.message ?? "Payment verification failed");
+            }
+          },
+          modal: {
+            ondismiss: () => {
+              toast.error("Payment cancelled — your booking is on hold");
+              setSubmitting(false);
+            },
+          },
+        }).open();
+        return;
+      }
+
+      // ── Cash / Wallet ───────────────────────────────────────────────────────
       toast.success(booking.status === "ASSIGNED" ? "Expert assigned! Tracking your booking…" : "Booking created — finding an expert…");
       navigate({ to: "/track/$bookingId", params: { bookingId: booking.id } });
     } catch (e: any) {
@@ -186,16 +253,53 @@ function BookService() {
           {/* Duration */}
           <div className="rounded-2xl border bg-card p-5">
             <Step n={2} title="How long do you need?" />
-            <div className="mt-4 grid grid-cols-4 gap-3">
-              {DURATIONS.map((d) => (
-                <button key={d} onClick={() => setDuration(d)} className={cn(
-                  "rounded-xl border-2 py-3 text-sm font-semibold transition-colors",
-                  duration === d ? "border-primary bg-primary/5 text-primary" : "border-border hover:border-primary/40",
-                )}>
-                  {d} hr{d > 1 ? "s" : ""}
+
+            {/* Hours / Days toggle */}
+            <div className="mt-4 inline-flex rounded-xl border bg-muted p-1 gap-1">
+              {(["hours", "days"] as const).map((u) => (
+                <button
+                  key={u}
+                  type="button"
+                  onClick={() => {
+                    setDurationUnit(u);
+                    setDurationValue(u === "hours" ? 1 : 1);
+                  }}
+                  className={cn(
+                    "rounded-lg px-5 py-1.5 text-sm font-semibold transition-all",
+                    durationUnit === u
+                      ? "bg-background shadow text-foreground"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {u === "hours" ? "Hours" : "Days"}
                 </button>
               ))}
             </div>
+
+            {/* Options */}
+            <div className="mt-3 grid grid-cols-4 gap-3 sm:grid-cols-5">
+              {(durationUnit === "hours" ? HOUR_OPTIONS : DAY_OPTIONS).map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => setDurationValue(d)}
+                  className={cn(
+                    "rounded-xl border-2 py-3 text-sm font-semibold transition-colors",
+                    durationValue === d && durationUnit === durationUnit
+                      ? "border-primary bg-primary/5 text-primary"
+                      : "border-border hover:border-primary/40",
+                  )}
+                >
+                  {d} {durationUnit === "hours" ? (d === 1 ? "hr" : "hrs") : (d === 1 ? "day" : "days")}
+                </button>
+              ))}
+            </div>
+
+            {durationUnit === "days" && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                1 day = {HRS_PER_DAY} hrs · priced at ₹{service.rate_per_hour}/hr
+              </p>
+            )}
           </div>
 
           {/* Address */}
@@ -265,12 +369,12 @@ function BookService() {
           {/* Payment method */}
           <div className="rounded-2xl border bg-card p-5">
             <Step n={4} title="Payment method" />
-            <div className="mt-4 grid grid-cols-2 gap-3">
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
               <button onClick={() => setPaymentMethod("CASH")} className={cn(
                 "flex items-center gap-3 rounded-xl border-2 p-4 text-left transition-colors",
                 paymentMethod === "CASH" ? "border-primary bg-primary/5" : "border-border hover:border-primary/40",
               )}>
-                <Banknote className={cn("h-5 w-5", paymentMethod === "CASH" ? "text-primary" : "text-muted-foreground")} />
+                <Banknote className={cn("h-5 w-5 shrink-0", paymentMethod === "CASH" ? "text-primary" : "text-muted-foreground")} />
                 <div>
                   <div className="text-sm font-semibold">Cash</div>
                   <div className="text-xs text-muted-foreground">Pay after service</div>
@@ -280,14 +384,27 @@ function BookService() {
                 "flex items-center gap-3 rounded-xl border-2 p-4 text-left transition-colors",
                 paymentMethod === "WALLET" ? "border-primary bg-primary/5" : "border-border hover:border-primary/40",
               )}>
-                <Wallet className={cn("h-5 w-5", paymentMethod === "WALLET" ? "text-primary" : "text-muted-foreground")} />
+                <Wallet className={cn("h-5 w-5 shrink-0", paymentMethod === "WALLET" ? "text-primary" : "text-muted-foreground")} />
                 <div>
                   <div className="text-sm font-semibold">Wallet</div>
                   <div className="text-xs text-muted-foreground">Balance ₹{walletBalance}</div>
                 </div>
               </button>
+              <button onClick={() => setPaymentMethod("ONLINE")} className={cn(
+                "flex items-center gap-3 rounded-xl border-2 p-4 text-left transition-colors",
+                paymentMethod === "ONLINE" ? "border-primary bg-primary/5" : "border-border hover:border-primary/40",
+              )}>
+                <CreditCard className={cn("h-5 w-5 shrink-0", paymentMethod === "ONLINE" ? "text-primary" : "text-muted-foreground")} />
+                <div>
+                  <div className="text-sm font-semibold">Online</div>
+                  <div className="text-xs text-muted-foreground">Card / UPI / NetBanking</div>
+                </div>
+              </button>
             </div>
             {walletShort && <p className="mt-2 text-xs text-destructive">Insufficient balance. Top up in your wallet or pay with cash.</p>}
+            {paymentMethod === "ONLINE" && (
+              <p className="mt-2 text-xs text-muted-foreground">You'll be redirected to the secure Razorpay checkout after placing the booking.</p>
+            )}
           </div>
         </div>
 
@@ -296,7 +413,15 @@ function BookService() {
           <div className="sticky top-20 rounded-2xl border bg-card p-5">
             <h3 className="font-semibold">Order summary</h3>
             <div className="mt-4 space-y-2 text-sm">
-              <div className="flex justify-between"><span className="text-muted-foreground">{service.name} × {duration} hr</span><span>₹{base}</span></div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">
+                  {service.name} ×{" "}
+                  {durationUnit === "days"
+                    ? `${durationValue} day${durationValue > 1 ? "s" : ""} (${totalHours} hrs)`
+                    : `${durationValue} hr${durationValue > 1 ? "s" : ""}`}
+                </span>
+                <span>₹{base}</span>
+              </div>
               <div className="flex justify-between"><span className="text-muted-foreground">Type</span><span>{type === "INSTANT" ? "Instant" : "Scheduled"}</span></div>
               {discount > 0 && (
                 <div className="flex justify-between text-emerald-600"><span>Coupon {coupon?.code}</span><span>−₹{discount}</span></div>
@@ -304,11 +429,14 @@ function BookService() {
               <div className="my-2 border-t" />
               <div className="flex justify-between text-base font-semibold"><span>Total</span><span>₹{total}</span></div>
               <div className="text-xs text-muted-foreground">
-                Incl. ₹{platformFee} platform fee · {paymentMethod === "WALLET" ? "Paid from wallet" : "Pay after service"}
+                Incl. ₹{platformFee} platform fee ·{" "}
+                {paymentMethod === "WALLET" ? "Paid from wallet" : paymentMethod === "ONLINE" ? "Pay via Razorpay" : "Pay after service"}
               </div>
             </div>
             <Button onClick={confirm} disabled={submitting || walletShort} className="mt-4 w-full" size="lg">
-              {submitting ? "Booking…" : `${type === "INSTANT" ? "Book now" : "Schedule"} · ₹${total}`}
+              {submitting
+              ? (paymentMethod === "ONLINE" ? "Opening payment…" : "Booking…")
+              : `${type === "INSTANT" ? "Book now" : "Schedule"} · ₹${total}`}
             </Button>
             <p className="mt-2 text-center text-xs text-muted-foreground">Free cancellation before the expert starts.</p>
           </div>
