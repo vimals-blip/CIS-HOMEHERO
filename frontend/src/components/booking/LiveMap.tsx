@@ -2,6 +2,26 @@ import { useEffect, useRef, useState } from "react";
 
 interface Pt { lat: number; lng: number }
 
+// Road routing via OSRM (free, OpenStreetMap-based, no API key required).
+// OSRM coordinates are [lng, lat] (GeoJSON); Leaflet needs [lat, lng] — we swap below.
+const OSRM_URL = "https://router.project-osrm.org/route/v1/driving";
+
+async function fetchRoute(from: Pt, to: Pt): Promise<[number, number][] | null> {
+  try {
+    const res = await fetch(
+      `${OSRM_URL}/${from.lng},${from.lat};${to.lng},${to.lat}?overview=full&geometries=geojson`,
+      { signal: AbortSignal.timeout(6000) },
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const coords: [number, number][] = data?.routes?.[0]?.geometry?.coordinates;
+    if (!coords?.length) return null;
+    return coords.map(([lng, lat]) => [lat, lng]); // swap to Leaflet [lat, lng]
+  } catch {
+    return null;
+  }
+}
+
 // Free live map using Leaflet + OpenStreetMap tiles (no API key, no billing).
 // Rendered client-side only (Leaflet needs the DOM) and updated imperatively
 // so the expert marker moves smoothly as new socket pings arrive.
@@ -10,6 +30,7 @@ export function LiveMap({ expert, dest, height = 280 }: { expert?: Pt | null; de
   const mapRef = useRef<any>(null);
   const expertMarkerRef = useRef<any>(null);
   const destMarkerRef = useRef<any>(null);
+  const routeRef = useRef<any>(null);
   const [ready, setReady] = useState(false);
 
   const center = expert ?? dest;
@@ -37,11 +58,11 @@ export function LiveMap({ expert, dest, height = 280 }: { expert?: Pt | null; de
       });
       const destIcon = L.divIcon({
         className: "",
-        html: '<div style="background:#111;width:14px;height:14px;border-radius:3px;border:2px solid white"></div>',
-        iconSize: [14, 14], iconAnchor: [7, 7],
+        html: '<div style="background:#111827;width:22px;height:28px;border-radius:4px 4px 0 0;border:2px solid white;clip-path:polygon(0 0,100% 0,100% 75%,50% 100%,0 75%)"></div>',
+        iconSize: [22, 28], iconAnchor: [11, 28],
       });
 
-      if (expert) expertMarkerRef.current = L.marker([expert.lat, expert.lng], { icon: expertIcon }).addTo(map).bindPopup("Your expert");
+      if (expert) expertMarkerRef.current = L.marker([expert.lat, expert.lng], { icon: expertIcon }).addTo(map).bindPopup("Expert");
       if (dest) destMarkerRef.current = L.marker([dest.lat, dest.lng], { icon: destIcon }).addTo(map).bindPopup("Service location");
 
       mapRef.current = map;
@@ -50,20 +71,56 @@ export function LiveMap({ expert, dest, height = 280 }: { expert?: Pt | null; de
     return () => { cancelled = true; };
   }, [center]);
 
-  // Move the expert marker on new pings; keep both markers in view.
+  // Move expert marker, fit both markers in view, and draw/refresh the road route.
   useEffect(() => {
     if (!ready || !mapRef.current || !expert) return;
     (async () => {
       const L = (await import("leaflet")).default;
-      if (expertMarkerRef.current) expertMarkerRef.current.setLatLng([expert.lat, expert.lng]);
-      else {
-        const icon = L.divIcon({ className: "", html: '<div style="background:#7c3aed;width:18px;height:18px;border-radius:9999px;border:3px solid white;box-shadow:0 0 0 2px #7c3aed"></div>', iconSize: [18, 18], iconAnchor: [9, 9] });
-        expertMarkerRef.current = L.marker([expert.lat, expert.lng], { icon }).addTo(mapRef.current);
+
+      // Move or create the expert marker.
+      if (expertMarkerRef.current) {
+        expertMarkerRef.current.setLatLng([expert.lat, expert.lng]);
+      } else {
+        const icon = L.divIcon({
+          className: "",
+          html: '<div style="background:#7c3aed;width:18px;height:18px;border-radius:9999px;border:3px solid white;box-shadow:0 0 0 2px #7c3aed"></div>',
+          iconSize: [18, 18], iconAnchor: [9, 9],
+        });
+        expertMarkerRef.current = L.marker([expert.lat, expert.lng], { icon }).addTo(mapRef.current).bindPopup("Expert");
       }
-      if (dest && destMarkerRef.current) {
-        mapRef.current.fitBounds([[expert.lat, expert.lng], [dest.lat, dest.lng]], { padding: [40, 40], maxZoom: 15 });
+
+      // Keep both markers in view.
+      if (dest) {
+        mapRef.current.fitBounds([[expert.lat, expert.lng], [dest.lat, dest.lng]], { padding: [50, 50], maxZoom: 15 });
       } else {
         mapRef.current.panTo([expert.lat, expert.lng]);
+      }
+
+      // Draw the road route between expert and destination.
+      if (dest) {
+        const coords = await fetchRoute(expert, dest);
+        if (!mapRef.current) return; // component may have unmounted
+        if (coords?.length) {
+          if (routeRef.current) {
+            routeRef.current.setLatLngs(coords);
+          } else {
+            routeRef.current = L.polyline(coords, {
+              color: "#7c3aed",
+              weight: 5,
+              opacity: 0.85,
+            }).addTo(mapRef.current);
+            routeRef.current.bringToBack();
+          }
+        } else if (!routeRef.current) {
+          // OSRM unavailable — fall back to a straight dashed line.
+          routeRef.current = L.polyline([[expert.lat, expert.lng], [dest.lat, dest.lng]], {
+            color: "#7c3aed",
+            weight: 3,
+            opacity: 0.6,
+            dashArray: "8 6",
+          }).addTo(mapRef.current);
+          routeRef.current.bringToBack();
+        }
       }
     })();
   }, [expert, dest, ready]);
