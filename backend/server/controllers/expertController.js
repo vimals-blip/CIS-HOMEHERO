@@ -66,15 +66,15 @@ export const expertController = {
   // Admin verifies/approves or rejects an expert.
   async setVerified(req, res) {
     const { is_verified } = req.body;
-    if (typeof is_verified !== ‘boolean’) throw BadRequest(‘INVALID_BODY’, ‘is_verified must be a boolean.’);
+    if (typeof is_verified !== 'boolean') throw BadRequest('INVALID_BODY', 'is_verified must be a boolean.');
     const expert = await ExpertModel.findById(req.params.id);
-    if (!expert) throw NotFound(‘Expert not found.’);
+    if (!expert) throw NotFound('Expert not found.');
     await ExpertModel.setVerified(req.params.id, is_verified);
-    audit(req, is_verified ? ‘EXPERT_VERIFIED’ : ‘EXPERT_REJECTED’, { entityType: ‘expert’, entityId: req.params.id });
+    audit(req, is_verified ? 'EXPERT_VERIFIED' : 'EXPERT_REJECTED', { entityType: 'expert', entityId: req.params.id });
     await notify(req.params.id, is_verified
-      ? { type: ‘expert_verified’, title: "You’re verified!", body: ‘Your profile is approved — go online to start receiving jobs.’ }
-      : { type: ‘expert_rejected’, title: ‘Verification update’, body: ‘Your verification needs attention. Please review your KYC documents.’ });
-    res.json({ status: ‘updated’, is_verified });
+      ? { type: 'expert_verified', title: "You're verified!", body: 'Your profile is approved — go online to start receiving jobs.' }
+      : { type: 'expert_rejected', title: 'Verification update', body: 'Your verification needs attention. Please review your KYC documents.' });
+    res.json({ status: 'updated', is_verified });
   },
 
   async updateProfile(req, res) {
@@ -98,6 +98,6 @@ export const expertController = {
       await prisma.experts.update({ where: { id }, data: expertData });
     }
 
-    res.json({ status: ‘updated’ });
+    res.json({ status: 'updated' });
   },
 };

@@ -67,6 +67,8 @@ function BookService() {
   const [couponLoading, setCouponLoading] = useState(false);
   const [showExperts, setShowExperts] = useState(false);
   const [preferredExpertId, setPreferredExpertId] = useState<string | null>(null);
+  const [saveNewAddr, setSaveNewAddr] = useState(false);
+  const [newAddrLabel, setNewAddrLabel] = useState("Home");
 
   const { data: service, isLoading } = useQuery({
     queryKey: ["service", serviceId],
@@ -165,6 +167,11 @@ function BookService() {
       body.address_snapshot = [addr.flat, addr.address_line, addr.city, addr.pincode].filter(Boolean).join(", ");
       body.pincode = addr.pincode.trim();
       if (geoCoords) { body.lat = geoCoords.lat; body.lng = geoCoords.lng; }
+      if (saveNewAddr) {
+        try {
+          await apiFetch("/addresses", { method: "POST", body: JSON.stringify({ label: newAddrLabel || "Home", flat: addr.flat, address_line: addr.address_line, city: addr.city, pincode: addr.pincode }) });
+        } catch { /* non-fatal */ }
+      }
     }
 
     setSubmitting(true);
@@ -343,11 +350,20 @@ function BookService() {
                   <Plus className="h-4 w-4" /> Use a new address
                 </button>
               ) : (
-                <div className="grid gap-3 rounded-xl border p-3 sm:grid-cols-2">
-                  <Input placeholder="Flat / House no." value={addr.flat} onChange={(e) => setAddr({ ...addr, flat: e.target.value })} />
-                  <Input placeholder="Street / Area" value={addr.address_line} onChange={(e) => setAddr({ ...addr, address_line: e.target.value })} />
-                  <Input placeholder="City" value={addr.city} onChange={(e) => setAddr({ ...addr, city: e.target.value })} />
-                  <Input placeholder="Pincode" value={addr.pincode} onChange={(e) => setAddr({ ...addr, pincode: e.target.value })} />
+                <div className="rounded-xl border p-3 space-y-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Input placeholder="Flat / House no." value={addr.flat} onChange={(e) => setAddr({ ...addr, flat: e.target.value })} />
+                    <Input placeholder="Street / Area *" value={addr.address_line} onChange={(e) => setAddr({ ...addr, address_line: e.target.value })} />
+                    <Input placeholder="City *" value={addr.city} onChange={(e) => setAddr({ ...addr, city: e.target.value })} />
+                    <Input placeholder="Pincode *" value={addr.pincode} onChange={(e) => setAddr({ ...addr, pincode: e.target.value })} />
+                  </div>
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input type="checkbox" checked={saveNewAddr} onChange={(e) => setSaveNewAddr(e.target.checked)} className="h-4 w-4 rounded border-border accent-primary" />
+                    <span className="text-sm text-muted-foreground">Save this address to my account</span>
+                  </label>
+                  {saveNewAddr && (
+                    <Input placeholder="Label (e.g. Home, Work)" value={newAddrLabel} onChange={(e) => setNewAddrLabel(e.target.value)} className="max-w-xs" />
+                  )}
                 </div>
               )}
             </div>
