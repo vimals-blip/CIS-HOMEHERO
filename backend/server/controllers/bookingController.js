@@ -79,6 +79,7 @@ export const bookingController = {
       service_id, duration_hours, booking_type = 'INSTANT', scheduled_at = null,
       address_id = null, address_snapshot = null, pincode = null, lat = null, lng = null,
       coupon_code = null, payment_method = 'CASH', notes = null,
+      preferred_expert_id = null,
     } = req.body;
 
     if (!service_id || duration_hours == null) {
@@ -137,12 +138,32 @@ export const bookingController = {
       }
     }
 
-    // Dispatch: find the best-ranked online expert near the booking.
-    const match = await dispatchService.findBestExpert(service_id, { lat: latVal, lng: lngVal });
-    const expert = match?.expert ?? null;
+    // Dispatch: prefer a customer-requested expert if they are available.
+    let expert = null;
+    let etaMinutes = null;
+    if (preferred_expert_id) {
+      const preferredRow = await ExpertModel.findById(preferred_expert_id);
+      if (preferredRow && preferredRow.status === 'ONLINE' && !Boolean(preferredRow.is_blocked)) {
+        const activeBusyCount = await prisma.bookings.count({
+          where: {
+            expert_id: preferred_expert_id,
+            status: { in: ['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'IN_PROGRESS'] },
+          },
+        });
+        if (activeBusyCount === 0) {
+          expert = preferredRow;
+          etaMinutes = booking_type === 'INSTANT' ? randomEta() : null;
+        }
+      }
+    }
+    if (!expert) {
+      const match = await dispatchService.findBestExpert(service_id, { lat: latVal, lng: lngVal });
+      expert = match?.expert ?? null;
+      etaMinutes = expert && booking_type === 'INSTANT' ? dispatchService.etaMinutes(match.distance) : null;
+    }
     const assigned = Boolean(expert);
     const status = assigned ? 'ASSIGNED' : 'SEARCHING';
-    const eta = assigned && booking_type === 'INSTANT' ? dispatchService.etaMinutes(match.distance) : null;
+    const eta = etaMinutes;
 
     const bookingPayload = {
       customerId: req.user.id,

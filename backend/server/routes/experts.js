@@ -13,6 +13,7 @@ router.get('/:id', asyncHandler(expertController.getOne));
 // Expert (self) or admin
 router.patch('/:id/status',     authMiddleware, asyncHandler(expertController.setStatus));
 router.patch('/:id/location',   authMiddleware, asyncHandler(expertController.setLocation));
+router.patch('/:id/profile',    authMiddleware, asyncHandler(expertController.updateProfile));
 
 // KYC documents (self or admin)
 router.get('/:id/upload-target', authMiddleware, asyncHandler(documentController.uploadTarget));

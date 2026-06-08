@@ -2,12 +2,13 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { Zap, CalendarClock, MapPin, Plus, Check, Tag, Wallet, Banknote, CreditCard, X } from "lucide-react";
+import { Zap, CalendarClock, MapPin, Plus, Check, Tag, Wallet, Banknote, CreditCard, X, ChevronDown, ChevronUp, Star, Briefcase } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { Avatar } from "@/components/shared/Avatar";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { serviceIcon } from "@/lib/icons";
@@ -23,7 +24,6 @@ const DAY_OPTIONS  = [1, 2, 3, 5, 7];
 const HRS_PER_DAY  = 8;
 const PLATFORM_FEE_PCT = 0.15;
 
-// Numbered step header for the booking wizard.
 function Step({ n, title, hint }: { n: number; title: string; hint?: string }) {
   return (
     <div className="flex items-center gap-3">
@@ -43,19 +43,17 @@ function BookService() {
 
   const [geoCoords, setGeoCoords] = useState<{ lat: number; lng: number } | null>(null);
 
-  // Silently capture browser geolocation to attach coordinates to the booking.
-  // Used as the destination for the live-tracking map.
   useEffect(() => {
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
       (pos) => setGeoCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => {}, // permission denied or unavailable — booking still works without coords
+      () => {},
       { maximumAge: 60000, timeout: 8000 },
     );
   }, []);
 
   const [durationUnit, setDurationUnit] = useState<"hours" | "days">("hours");
-  const [durationValue, setDurationValue] = useState(1); // hrs or days depending on unit
+  const [durationValue, setDurationValue] = useState(1);
   const [type, setType] = useState<"INSTANT" | "SCHEDULED">("INSTANT");
   const [scheduledAt, setScheduledAt] = useState("");
   const [selectedAddr, setSelectedAddr] = useState<string | null>(null);
@@ -67,6 +65,8 @@ function BookService() {
   const [couponInput, setCouponInput] = useState("");
   const [coupon, setCoupon] = useState<{ code: string; discount: number } | null>(null);
   const [couponLoading, setCouponLoading] = useState(false);
+  const [showExperts, setShowExperts] = useState(false);
+  const [preferredExpertId, setPreferredExpertId] = useState<string | null>(null);
 
   const { data: service, isLoading } = useQuery({
     queryKey: ["service", serviceId],
@@ -83,6 +83,12 @@ function BookService() {
     enabled: !!user,
     queryKey: ["wallet", user?.id],
     queryFn: () => apiFetch(`/wallet`),
+  });
+
+  const { data: availableExperts = [] } = useQuery({
+    enabled: showExperts,
+    queryKey: ["experts-for-service", serviceId],
+    queryFn: () => apiFetch(`/experts?service_id=${serviceId}&limit=20`),
   });
 
   if (isLoading) return <div className="container mx-auto px-4 py-16"><LoadingSpinner /></div>;
@@ -108,7 +114,6 @@ function BookService() {
     });
   }
 
-  // Re-validate any applied coupon against the current base amount.
   const applyCoupon = async () => {
     const code = couponInput.trim();
     if (!code) return;
@@ -127,6 +132,17 @@ function BookService() {
 
   const clearCoupon = () => { setCoupon(null); setCouponInput(""); };
 
+  // Re-validate applied coupon silently when base amount changes.
+  useEffect(() => {
+    if (!coupon) return;
+    let cancelled = false;
+    apiFetch("/coupons/validate", { method: "POST", body: JSON.stringify({ code: coupon.code, amount: base }) })
+      .then((res) => { if (!cancelled) setCoupon({ code: res.code, discount: res.discount }); })
+      .catch(() => { if (!cancelled) setCoupon((c) => c ? { ...c, discount: 0 } : null); });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [base]);
+
   const confirm = async () => {
     if (!user) { toast.error("Please log in to book"); navigate({ to: "/auth/login" }); return; }
     if (type === "SCHEDULED" && !scheduledAt) { toast.error("Pick a date and time"); return; }
@@ -137,6 +153,7 @@ function BookService() {
       payment_method: paymentMethod, coupon_code: coupon?.code ?? null, notes: notes.trim() || null,
     };
     if (type === "SCHEDULED") body.scheduled_at = scheduledAt.replace("T", " ") + ":00";
+    if (preferredExpertId) body.preferred_expert_id = preferredExpertId;
 
     if (selectedAddr) {
       body.address_id = selectedAddr;
@@ -154,10 +171,8 @@ function BookService() {
     try {
       const booking = await apiFetch("/bookings", { method: "POST", body: JSON.stringify(body) });
 
-      // ── Online payment: open Razorpay checkout ──────────────────────────────
       if (paymentMethod === "ONLINE" && booking.gateway_order_id) {
         if (booking.gateway_mock) {
-          // Mock mode: auto-verify without opening the modal
           await apiFetch("/payments/verify", {
             method: "POST",
             body: JSON.stringify({ order_id: booking.gateway_order_id, payment_id: "pay_mock", signature: "mock_signature" }),
@@ -205,7 +220,6 @@ function BookService() {
         return;
       }
 
-      // ── Cash / Wallet ───────────────────────────────────────────────────────
       toast.success(booking.status === "ASSIGNED" ? "Expert assigned! Tracking your booking…" : "Booking created — finding an expert…");
       navigate({ to: "/track/$bookingId", params: { bookingId: booking.id } });
     } catch (e: any) {
@@ -214,6 +228,8 @@ function BookService() {
       setSubmitting(false);
     }
   };
+
+  const selectedExpert = preferredExpertId ? (availableExperts as any[]).find((e) => e.id === preferredExpertId) : null;
 
   return (
     <div className="container mx-auto max-w-5xl px-4 py-8">
@@ -267,30 +283,21 @@ function BookService() {
           {/* Duration */}
           <div className="rounded-2xl border bg-card p-5">
             <Step n={2} title="How long do you need?" />
-
-            {/* Hours / Days toggle */}
             <div className="mt-4 inline-flex rounded-xl border bg-muted p-1 gap-1">
               {(["hours", "days"] as const).map((u) => (
                 <button
                   key={u}
                   type="button"
-                  onClick={() => {
-                    setDurationUnit(u);
-                    setDurationValue(u === "hours" ? 1 : 1);
-                  }}
+                  onClick={() => { setDurationUnit(u); setDurationValue(1); }}
                   className={cn(
                     "rounded-lg px-5 py-1.5 text-sm font-semibold transition-all",
-                    durationUnit === u
-                      ? "bg-background shadow text-foreground"
-                      : "text-muted-foreground hover:text-foreground",
+                    durationUnit === u ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground",
                   )}
                 >
                   {u === "hours" ? "Hours" : "Days"}
                 </button>
               ))}
             </div>
-
-            {/* Options */}
             <div className="mt-3 grid grid-cols-4 gap-3 sm:grid-cols-5">
               {(durationUnit === "hours" ? HOUR_OPTIONS : DAY_OPTIONS).map((d) => (
                 <button
@@ -299,20 +306,15 @@ function BookService() {
                   onClick={() => setDurationValue(d)}
                   className={cn(
                     "rounded-xl border-2 py-3 text-sm font-semibold transition-colors",
-                    durationValue === d && durationUnit === durationUnit
-                      ? "border-primary bg-primary/5 text-primary"
-                      : "border-border hover:border-primary/40",
+                    durationValue === d ? "border-primary bg-primary/5 text-primary" : "border-border hover:border-primary/40",
                   )}
                 >
                   {d} {durationUnit === "hours" ? (d === 1 ? "hr" : "hrs") : (d === 1 ? "day" : "days")}
                 </button>
               ))}
             </div>
-
             {durationUnit === "days" && (
-              <p className="mt-2 text-xs text-muted-foreground">
-                1 day = {HRS_PER_DAY} hrs · priced at ₹{service.rate_per_hour}/hr
-              </p>
+              <p className="mt-2 text-xs text-muted-foreground">1 day = {HRS_PER_DAY} hrs · priced at ₹{service.rate_per_hour}/hr</p>
             )}
           </div>
 
@@ -355,6 +357,59 @@ function BookService() {
             </div>
           </div>
 
+          {/* Expert selection (optional) */}
+          <div className="rounded-2xl border bg-card p-5">
+            <button onClick={() => setShowExperts((v) => !v)} className="flex w-full items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Step n={4} title="Choose your expert (optional)" hint="Skip to let us assign the best available" />
+              </div>
+              {showExperts ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+            </button>
+            {selectedExpert && !showExperts && (
+              <div className="mt-3 flex items-center gap-3 rounded-xl border-2 border-primary bg-primary/5 p-3">
+                <Avatar src={selectedExpert.avatar_url} name={selectedExpert.name} size={36} />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold">{selectedExpert.name}</div>
+                  <div className="text-xs text-muted-foreground">{selectedExpert.city}</div>
+                </div>
+                <button onClick={() => setPreferredExpertId(null)} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
+              </div>
+            )}
+            {showExperts && (
+              <div className="mt-4 space-y-2">
+                {(availableExperts as any[]).length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">No experts available for this service right now.</p>
+                ) : (
+                  (availableExperts as any[]).map((e) => (
+                    <div key={e.id} className={cn(
+                      "flex items-center gap-3 rounded-xl border-2 p-3 transition-colors",
+                      preferredExpertId === e.id ? "border-primary bg-primary/5" : "border-border",
+                    )}>
+                      <Avatar src={e.avatar_url} name={e.name} size={40} />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-semibold">{e.name ?? "Expert"}</div>
+                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                          <span className="flex items-center gap-0.5"><Star className="h-3 w-3 fill-amber-400 text-amber-400" />{Number(e.avg_rating).toFixed(1)}</span>
+                          <span className="flex items-center gap-0.5"><Briefcase className="h-3 w-3" />{e.total_jobs ?? 0} jobs</span>
+                          {e.city && <span>{e.city}</span>}
+                        </div>
+                      </div>
+                      {preferredExpertId === e.id ? (
+                        <Button size="sm" variant="outline" className="shrink-0 h-8 text-xs" onClick={() => setPreferredExpertId(null)}>
+                          <X className="mr-1 h-3 w-3" /> Clear
+                        </Button>
+                      ) : (
+                        <Button size="sm" variant="outline" className="shrink-0 h-8 text-xs" onClick={() => setPreferredExpertId(e.id)}>
+                          Select
+                        </Button>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Coupon */}
           <div className="rounded-2xl border bg-card p-5">
             <h3 className="font-semibold">Apply coupon</h3>
@@ -382,7 +437,7 @@ function BookService() {
 
           {/* Payment method */}
           <div className="rounded-2xl border bg-card p-5">
-            <Step n={4} title="Payment method" />
+            <Step n={5} title="Payment method" />
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
               <button onClick={() => setPaymentMethod("CASH")} className={cn(
                 "flex items-center gap-3 rounded-xl border-2 p-4 text-left transition-colors",
@@ -437,6 +492,9 @@ function BookService() {
                 <span>₹{base}</span>
               </div>
               <div className="flex justify-between"><span className="text-muted-foreground">Type</span><span>{type === "INSTANT" ? "Instant" : "Scheduled"}</span></div>
+              {selectedExpert && (
+                <div className="flex justify-between"><span className="text-muted-foreground">Expert</span><span className="font-medium">{selectedExpert.name}</span></div>
+              )}
               {discount > 0 && (
                 <div className="flex justify-between text-emerald-600"><span>Coupon {coupon?.code}</span><span>−₹{discount}</span></div>
               )}

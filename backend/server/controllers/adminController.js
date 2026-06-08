@@ -6,6 +6,7 @@ import { CouponModel } from '../models/CouponModel.js';
 import { WithdrawalModel } from '../models/WithdrawalModel.js';
 import { WalletModel } from '../models/WalletModel.js';
 import { AuditModel } from '../models/AuditModel.js';
+import prisma from '../prisma.js';
 import bcrypt from 'bcryptjs';
 import { audit } from '../services/auditService.js';
 import { notify } from '../services/notificationService.js';
@@ -217,5 +218,103 @@ export const adminController = {
     if (!existing) throw NotFound('Coupon not found.');
     await CouponModel.setActive(req.params.id, is_active);
     res.json({ status: 'updated', is_active });
+  },
+
+  async getExpertDetail(req, res) {
+    const { id } = req.params;
+    const expert = await ExpertModel.findById(id);
+    if (!expert) throw NotFound('Expert not found.');
+    const [serviceIds, profile, bookings, transactions, documents] = await Promise.all([
+      ExpertModel.getServiceIds(id),
+      UserModel.getProfile(id),
+      BookingModel.findForExpert(id),
+      WalletModel.transactionsForUser(id, 20),
+      prisma.expert_documents.findMany({ where: { expert_id: id } }),
+    ]);
+    res.json({
+      id: expert.id,
+      name: profile?.name ?? expert.name ?? null,
+      city: profile?.city ?? expert.city ?? null,
+      email: null,
+      gender: expert.gender,
+      bio: expert.bio,
+      experience_years: expert.experience_years,
+      avg_rating: Number(expert.avg_rating || 0),
+      total_jobs: expert.total_jobs ?? 0,
+      is_verified: Boolean(expert.is_verified),
+      is_trained: Boolean(expert.is_trained),
+      status: expert.status,
+      onboarding_status: expert.onboarding_status,
+      avatar_url: profile?.avatar_url ?? expert.avatar_url ?? null,
+      is_blocked: Boolean(expert.is_blocked),
+      created_at: expert.created_at,
+      service_ids: serviceIds,
+      bookings: (bookings ?? []).slice(0, 10),
+      transactions: transactions ?? [],
+      documents: documents ?? [],
+    });
+  },
+
+  async updateExpert(req, res) {
+    const { id } = req.params;
+    const expert = await ExpertModel.findById(id);
+    if (!expert) throw NotFound('Expert not found.');
+    const { bio, gender, experience_years, is_trained, is_verified, is_blocked, service_ids, name, avatar_url, city } = req.body;
+
+    const profileData = {};
+    if (name !== undefined) profileData.name = name;
+    if (city !== undefined) profileData.city = city;
+    if (avatar_url !== undefined) profileData.avatar_url = avatar_url;
+    if (Object.keys(profileData).length) await UserModel.updateProfile(id, profileData);
+
+    const expertData = {};
+    if (bio !== undefined) expertData.bio = bio;
+    if (gender !== undefined) expertData.gender = gender;
+    if (experience_years !== undefined) expertData.experience_years = Number(experience_years);
+    if (is_trained !== undefined) expertData.is_trained = Boolean(is_trained);
+    if (Object.keys(expertData).length) await prisma.experts.update({ where: { id }, data: expertData });
+
+    if (is_verified !== undefined) {
+      await ExpertModel.setVerified(id, Boolean(is_verified));
+      audit(req, Boolean(is_verified) ? 'EXPERT_VERIFIED' : 'EXPERT_REJECTED', { entityType: 'expert', entityId: id });
+    }
+    if (is_blocked !== undefined) {
+      await UserModel.setBlocked(id, Boolean(is_blocked));
+      audit(req, Boolean(is_blocked) ? 'USER_BLOCKED' : 'USER_UNBLOCKED', { entityType: 'expert', entityId: id });
+    }
+    if (Array.isArray(service_ids)) {
+      await prisma.expert_services.deleteMany({ where: { expert_id: id } });
+      if (service_ids.length) {
+        await prisma.expert_services.createMany({
+          data: service_ids.map((sid) => ({ expert_id: id, service_id: sid })),
+          skipDuplicates: true,
+        });
+      }
+    }
+    audit(req, 'EXPERT_UPDATED', { entityType: 'expert', entityId: id });
+    res.json({ status: 'updated' });
+  },
+
+  async deleteExpert(req, res) {
+    const { id } = req.params;
+    const expert = await ExpertModel.findById(id);
+    if (!expert) throw NotFound('Expert not found.');
+    await UserModel.remove(id);
+    audit(req, 'USER_DELETED', { entityType: 'expert', entityId: id, detail: `expert ${id}` });
+    res.json({ status: 'deleted' });
+  },
+
+  async getBookingDetail(req, res) {
+    const booking = await BookingModel.findById(req.params.id);
+    if (!booking) throw NotFound('Booking not found.');
+    res.json({
+      ...booking,
+      total_amount: Number(booking.total_amount),
+      platform_fee: Number(booking.platform_fee),
+      expert_amount: Number(booking.expert_amount),
+      base_amount: Number(booking.base_amount),
+      discount_amount: Number(booking.discount_amount ?? 0),
+      duration_hours: Number(booking.duration_hours),
+    });
   },
 };

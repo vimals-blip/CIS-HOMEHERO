@@ -1,7 +1,7 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { Wallet, Briefcase, Star, TrendingUp, Wifi, WifiOff, MapPin, Clock, ShieldAlert, BanknoteArrowDown, Upload, CheckCircle2, XCircle, Clock3, FileUp, Loader2, Navigation } from "lucide-react";
+import { Wallet, Briefcase, Star, TrendingUp, Wifi, WifiOff, MapPin, Clock, ShieldAlert, BanknoteArrowDown, Upload, CheckCircle2, XCircle, Clock3, FileUp, Loader2, Navigation, ChevronDown, ChevronUp, UserCircle } from "lucide-react";
 import { apiFetch, uploadFile } from "@/lib/api";
 import { getSocket } from "@/lib/socket";
 import { useAuth } from "@/lib/auth-context";
@@ -13,6 +13,8 @@ import { Avatar } from "@/components/shared/Avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -48,6 +50,8 @@ function ExpertDashboard() {
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [wdAmount, setWdAmount] = useState("");
   const [uploadingType, setUploadingType] = useState<string | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileForm, setProfileForm] = useState({ name: "", bio: "", experience_years: "", gender: "" });
 
   useEffect(() => {
     if (!loading) {
@@ -74,6 +78,27 @@ function ExpertDashboard() {
   useEffect(() => {
     if (data?.expert && isOnline === null) setIsOnline(data.expert.status === "ONLINE");
   }, [data?.expert, isOnline]);
+
+  useEffect(() => {
+    if (data?.expert) {
+      setProfileForm({
+        name: data.expert.name ?? "",
+        bio: data.expert.bio ?? "",
+        experience_years: String(data.expert.experience_years ?? ""),
+        gender: data.expert.gender ?? "",
+      });
+    }
+  }, [data?.expert]);
+
+  const saveProfile = useMutation({
+    mutationFn: (body: object) => apiFetch(`/experts/${user!.id}/profile`, { method: "PATCH", body: JSON.stringify(body) }),
+    onSuccess: () => {
+      toast.success("Profile updated");
+      setProfileOpen(false);
+      qc.invalidateQueries({ queryKey: ["expert-dashboard", user?.id] });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
 
   // Stream live location to assigned customers while online.
   useEffect(() => {
@@ -230,6 +255,56 @@ function ExpertDashboard() {
             <div className="text-xs text-muted-foreground">{s.label}</div>
           </div>
         ))}
+      </div>
+
+      {/* My Profile */}
+      <div className="mt-8 rounded-2xl border bg-card p-5">
+        <button onClick={() => setProfileOpen((v) => !v)} className="flex w-full items-center justify-between">
+          <div className="flex items-center gap-2 text-sm font-semibold">
+            <UserCircle className="h-4 w-4 text-primary" /> My Profile
+          </div>
+          {profileOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+        </button>
+        {!profileOpen && expert && (
+          <div className="mt-2 text-sm text-muted-foreground line-clamp-2">{expert.bio || "No bio yet — add one to help customers find you."}</div>
+        )}
+        {profileOpen && (
+          <div className="mt-4 space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <Label>Display name</Label>
+                <Input className="mt-1" value={profileForm.name} onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })} />
+              </div>
+              <div>
+                <Label>Experience (years)</Label>
+                <Input type="number" min={0} className="mt-1" value={profileForm.experience_years} onChange={(e) => setProfileForm({ ...profileForm, experience_years: e.target.value })} />
+              </div>
+              <div>
+                <Label>Gender</Label>
+                <Select value={profileForm.gender} onValueChange={(v) => setProfileForm({ ...profileForm, gender: v })}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="Select gender" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="MALE">Male</SelectItem>
+                    <SelectItem value="FEMALE">Female</SelectItem>
+                    <SelectItem value="OTHER">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div>
+              <Label>Bio</Label>
+              <Textarea className="mt-1" rows={3} value={profileForm.bio} onChange={(e) => setProfileForm({ ...profileForm, bio: e.target.value })} placeholder="Tell customers about your skills and experience…" />
+            </div>
+            <Button disabled={saveProfile.isPending} onClick={() => saveProfile.mutate({
+              name: profileForm.name || undefined,
+              bio: profileForm.bio || undefined,
+              gender: profileForm.gender || undefined,
+              experience_years: profileForm.experience_years ? Number(profileForm.experience_years) : undefined,
+            })}>
+              {saveProfile.isPending ? "Saving…" : "Save profile"}
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Earnings & withdrawals */}

@@ -5,7 +5,7 @@ import {
   LayoutDashboard, ShieldCheck, Users, Briefcase, Tag, Ticket,
   CheckCircle2, XCircle, Plus, RefreshCw, Search, IndianRupee,
   Star, BookOpen, Circle, AlertCircle, Wallet, LifeBuoy, Settings as SettingsIcon, Send, ArrowLeft,
-  ScrollText, KeyRound, FileText, ExternalLink,
+  ScrollText, KeyRound, FileText, ExternalLink, Trash2,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -271,6 +271,60 @@ function AdminDashboard() {
     mutationFn: () => apiFetch(`/admin/pages/${pageSlug}`, { method: "PUT", body: JSON.stringify(pageForm) }),
     onSuccess: () => { toast.success("Page saved"); qc.invalidateQueries({ queryKey: ["admin-page", pageSlug] }); },
     onError: (e: any) => toast.error(e.message),
+  });
+
+  // Expert detail panel
+  const [detailExpertId, setDetailExpertId] = useState<string | null>(null);
+  const [expertEditForm, setExpertEditForm] = useState<any>({});
+  const [expertServiceIds, setExpertServiceIds] = useState<string[]>([]);
+  const { data: detailExpert, isLoading: expertDetailLoading } = useQuery({
+    enabled: !!detailExpertId,
+    queryKey: ["admin-expert-detail", detailExpertId],
+    queryFn: () => apiFetch(`/admin/experts/${detailExpertId}`),
+  });
+  useEffect(() => {
+    if (detailExpert) {
+      setExpertEditForm({
+        name: detailExpert.name ?? "",
+        city: detailExpert.city ?? "",
+        bio: detailExpert.bio ?? "",
+        gender: detailExpert.gender ?? "",
+        experience_years: detailExpert.experience_years ?? "",
+        is_trained: Boolean(detailExpert.is_trained),
+        is_verified: Boolean(detailExpert.is_verified),
+        is_blocked: Boolean(detailExpert.is_blocked),
+        avatar_url: detailExpert.avatar_url ?? "",
+      });
+      setExpertServiceIds(detailExpert.service_ids ?? []);
+    }
+  }, [detailExpert]);
+  const saveExpert = useMutation({
+    mutationFn: (body: object) => apiFetch(`/admin/experts/${detailExpertId}`, { method: "PATCH", body: JSON.stringify(body) }),
+    onSuccess: () => {
+      toast.success("Expert updated");
+      qc.invalidateQueries({ queryKey: ["admin-expert-detail", detailExpertId] });
+      qc.invalidateQueries({ queryKey: ["admin-experts"] });
+      qc.invalidateQueries({ queryKey: ["admin-overview"] });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const deleteExpert = useMutation({
+    mutationFn: () => apiFetch(`/admin/experts/${detailExpertId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      toast.success("Expert deleted");
+      setDetailExpertId(null);
+      qc.invalidateQueries({ queryKey: ["admin-experts"] });
+      qc.invalidateQueries({ queryKey: ["admin-overview"] });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  // Booking detail panel
+  const [detailBookingId, setDetailBookingId] = useState<string | null>(null);
+  const { data: detailBooking, isLoading: bookingDetailLoading } = useQuery({
+    enabled: !!detailBookingId,
+    queryKey: ["admin-booking-detail", detailBookingId],
+    queryFn: () => apiFetch(`/admin/bookings/${detailBookingId}`),
   });
 
   // User detail drawer
@@ -666,7 +720,7 @@ function AdminDashboard() {
                     <tbody>
                       {experts.length === 0 ? <tr><td colSpan={7} className="py-12 text-center text-muted-foreground">No experts match</td></tr> :
                         experts.map((e: any) => (
-                          <tr key={e.id} className="border-t hover:bg-muted/20">
+                          <tr key={e.id} className="cursor-pointer border-t hover:bg-muted/20" onClick={() => setDetailExpertId(e.id)}>
                             <td className="px-5 py-3">
                               <div className="flex items-center gap-3">
                                 <Avatar src={e.avatar_url} name={e.name ?? "E"} size={32} />
@@ -678,7 +732,7 @@ function AdminDashboard() {
                             <td className="px-5 py-3"><div className="flex items-center gap-1"><Star className="h-3 w-3 fill-amber-400 text-amber-400" />{Number(e.avg_rating).toFixed(1)} <span className="text-xs text-muted-foreground">({e.review_count})</span></div></td>
                             <td className="px-5 py-3"><div className="flex items-center gap-1.5"><StatusDot status={e.status} /><span className="text-xs capitalize">{(e.status ?? "offline").toLowerCase()}</span></div></td>
                             <td className="px-5 py-3">{e.is_verified ? <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600"><CheckCircle2 className="h-3.5 w-3.5" />Verified</span> : <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600"><AlertCircle className="h-3.5 w-3.5" />Pending</span>}</td>
-                            <td className="px-5 py-3 text-right"><Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => verify.mutate({ id: e.id, is_verified: !e.is_verified })}>{e.is_verified ? "Revoke" : "Approve"}</Button></td>
+                            <td className="px-5 py-3 text-right" onClick={(ev) => ev.stopPropagation()}><Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => verify.mutate({ id: e.id, is_verified: !e.is_verified })}>{e.is_verified ? "Revoke" : "Approve"}</Button></td>
                           </tr>
                         ))}
                     </tbody>
@@ -709,7 +763,7 @@ function AdminDashboard() {
                     <tbody>
                       {allBookings.length === 0 ? <tr><td colSpan={6} className="py-12 text-center text-muted-foreground">No bookings yet</td></tr> :
                         allBookings.map((b: any) => (
-                          <tr key={b.id} className="border-t hover:bg-muted/20">
+                          <tr key={b.id} className="cursor-pointer border-t hover:bg-muted/20" onClick={() => setDetailBookingId(b.id)}>
                             <td className="px-5 py-3 font-medium">{b.service_name ?? "Service"}</td>
                             <td className="px-5 py-3 text-muted-foreground">{b.customer_name ?? "—"}</td>
                             <td className="px-5 py-3 text-muted-foreground">{b.expert_name ?? "—"}</td>
@@ -1219,6 +1273,167 @@ function AdminDashboard() {
 
         </div>
       </div>
+
+      {/* Expert Detail Dialog */}
+      <Dialog open={!!detailExpertId} onOpenChange={(o) => !o && setDetailExpertId(null)}>
+        <DialogContent className="max-h-[85vh] max-w-2xl overflow-auto">
+          <DialogHeader><DialogTitle>Expert details</DialogTitle></DialogHeader>
+          {expertDetailLoading || !detailExpert ? <LoadingSpinner /> : (
+            <div className="space-y-5 text-sm">
+              <div className="flex items-start gap-4">
+                <Avatar src={expertEditForm.avatar_url || detailExpert.avatar_url} name={detailExpert.name ?? "E"} size={56} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-semibold text-base">{detailExpert.name ?? "Expert"}</span>
+                    {detailExpert.is_verified && <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600"><CheckCircle2 className="h-3.5 w-3.5" />Verified</span>}
+                    {detailExpert.is_blocked && <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-700">BLOCKED</span>}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-0.5">{detailExpert.city ?? "—"} · {detailExpert.status}</div>
+                  <div className="mt-1 flex gap-4 text-xs">
+                    <span className="flex items-center gap-1"><Star className="h-3 w-3 fill-amber-400 text-amber-400" />{Number(detailExpert.avg_rating).toFixed(1)}</span>
+                    <span>{detailExpert.total_jobs ?? 0} jobs</span>
+                    <span>{detailExpert.is_trained ? "Trained" : "Not trained"}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3 rounded-xl border p-4">
+                <div className="text-[10px] font-semibold uppercase text-muted-foreground">Edit expert</div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><Label className="text-xs">Name</Label><Input className="mt-1 h-8" value={expertEditForm.name} onChange={(e) => setExpertEditForm({ ...expertEditForm, name: e.target.value })} /></div>
+                  <div><Label className="text-xs">City</Label><Input className="mt-1 h-8" value={expertEditForm.city} onChange={(e) => setExpertEditForm({ ...expertEditForm, city: e.target.value })} /></div>
+                  <div><Label className="text-xs">Experience (years)</Label><Input type="number" min={0} className="mt-1 h-8" value={expertEditForm.experience_years} onChange={(e) => setExpertEditForm({ ...expertEditForm, experience_years: e.target.value })} /></div>
+                  <div><Label className="text-xs">Gender</Label>
+                    <Select value={expertEditForm.gender} onValueChange={(v) => setExpertEditForm({ ...expertEditForm, gender: v })}>
+                      <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue placeholder="Gender" /></SelectTrigger>
+                      <SelectContent><SelectItem value="MALE">Male</SelectItem><SelectItem value="FEMALE">Female</SelectItem><SelectItem value="OTHER">Other</SelectItem></SelectContent>
+                    </Select>
+                  </div>
+                  <div className="col-span-2"><Label className="text-xs">Avatar URL</Label><Input className="mt-1 h-8" value={expertEditForm.avatar_url} onChange={(e) => setExpertEditForm({ ...expertEditForm, avatar_url: e.target.value })} /></div>
+                  <div className="col-span-2"><Label className="text-xs">Bio</Label><Textarea className="mt-1" rows={2} value={expertEditForm.bio} onChange={(e) => setExpertEditForm({ ...expertEditForm, bio: e.target.value })} /></div>
+                </div>
+                <div className="flex flex-wrap gap-4 text-xs">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={expertEditForm.is_trained} onChange={(e) => setExpertEditForm({ ...expertEditForm, is_trained: e.target.checked })} />
+                    Trained
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={expertEditForm.is_verified} onChange={(e) => setExpertEditForm({ ...expertEditForm, is_verified: e.target.checked })} />
+                    Verified
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={expertEditForm.is_blocked} onChange={(e) => setExpertEditForm({ ...expertEditForm, is_blocked: e.target.checked })} />
+                    Blocked
+                  </label>
+                </div>
+              </div>
+
+              {(data?.services ?? []).length > 0 && (
+                <div className="rounded-xl border p-4">
+                  <div className="text-[10px] font-semibold uppercase text-muted-foreground mb-2">Services offered</div>
+                  <div className="flex flex-wrap gap-2">
+                    {(data?.services ?? []).map((s: any) => {
+                      const checked = expertServiceIds.includes(s.id);
+                      return (
+                        <label key={s.id} className={cn(
+                          "flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                          checked ? "border-primary/40 bg-primary/5 text-primary" : "border-border text-muted-foreground",
+                        )}>
+                          <input type="checkbox" className="hidden" checked={checked} onChange={(e) => setExpertServiceIds(e.target.checked ? [...expertServiceIds, s.id] : expertServiceIds.filter((id) => id !== s.id))} />
+                          {s.name}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {(detailExpert.bookings ?? []).length > 0 && (
+                <div>
+                  <div className="mb-1.5 text-[10px] font-semibold uppercase text-muted-foreground">Recent bookings ({detailExpert.bookings.length})</div>
+                  <div className="max-h-40 space-y-1 overflow-auto">
+                    {detailExpert.bookings.slice(0, 10).map((b: any) => (
+                      <div key={b.id} className="flex items-center justify-between rounded-lg border px-3 py-1.5 text-xs">
+                        <span>{b.service_name ?? "Service"} <span className="text-muted-foreground">· {b.customer_name ?? "—"}</span></span>
+                        <span className="flex items-center gap-2"><span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold", STATUS_PILL[b.status] ?? "bg-slate-100")}>{b.status}</span> ₹{Number(b.expert_amount).toFixed(0)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {(detailExpert.documents ?? []).length > 0 && (
+                <div>
+                  <div className="mb-1.5 text-[10px] font-semibold uppercase text-muted-foreground">Documents</div>
+                  <div className="space-y-1.5">
+                    {(detailExpert.documents ?? []).map((d: any) => {
+                      const statusCls = d.status === "APPROVED" ? "bg-emerald-100 text-emerald-700" : d.status === "REJECTED" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700";
+                      return (
+                        <div key={d.id} className="flex items-center justify-between rounded-lg border px-3 py-2 text-xs">
+                          <span className="font-medium">{d.type}</span>
+                          <span className={cn("rounded-full px-2.5 py-0.5 text-[10px] font-semibold", statusCls)}>{d.status}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between border-t pt-3">
+                <span className="text-[11px] text-muted-foreground">Joined {detailExpert.created_at ? new Date(detailExpert.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}</span>
+                <div className="flex gap-2">
+                  <Button size="sm" className="h-8" disabled={saveExpert.isPending} onClick={() => saveExpert.mutate({ ...expertEditForm, experience_years: expertEditForm.experience_years ? Number(expertEditForm.experience_years) : undefined, service_ids: expertServiceIds })}>
+                    {saveExpert.isPending ? "Saving…" : "Save changes"}
+                  </Button>
+                  {isSuperAdmin && (
+                    <Button size="sm" variant="outline" className="h-8 border-red-200 text-red-600 hover:bg-red-50" disabled={deleteExpert.isPending}
+                      onClick={() => { if (confirm("Permanently delete this expert and all their data?")) deleteExpert.mutate(); }}>
+                      <Trash2 className="mr-1 h-3.5 w-3.5" /> Delete
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Booking Detail Dialog */}
+      <Dialog open={!!detailBookingId} onOpenChange={(o) => !o && setDetailBookingId(null)}>
+        <DialogContent className="max-h-[85vh] max-w-lg overflow-auto">
+          <DialogHeader><DialogTitle>Booking details</DialogTitle></DialogHeader>
+          {bookingDetailLoading || !detailBooking ? <LoadingSpinner /> : (
+            <div className="space-y-4 text-sm">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-semibold text-base">{detailBooking.service_name ?? "Service"}</div>
+                  <div className="text-xs text-muted-foreground">{detailBooking.booking_type} · {detailBooking.created_at ? new Date(detailBooking.created_at).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—"}</div>
+                </div>
+                <span className={cn("rounded-full px-2.5 py-0.5 text-[10px] font-semibold", STATUS_PILL[detailBooking.status] ?? "bg-slate-100")}>{detailBooking.status}</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 rounded-xl border p-3 text-xs">
+                <div><div className="text-muted-foreground">Customer</div><div className="font-medium">{detailBooking.customer_name ?? "—"}</div></div>
+                <div><div className="text-muted-foreground">Expert</div><div className="font-medium">{detailBooking.expert_name ?? "Not assigned"}</div></div>
+                <div className="col-span-2"><div className="text-muted-foreground">Address</div><div className="font-medium">{detailBooking.address_snapshot ?? "—"}</div></div>
+                {detailBooking.notes && <div className="col-span-2"><div className="text-muted-foreground">Notes</div><div>{detailBooking.notes}</div></div>}
+                {detailBooking.scheduled_at && <div className="col-span-2"><div className="text-muted-foreground">Scheduled at</div><div className="font-medium">{new Date(detailBooking.scheduled_at).toLocaleString("en-IN")}</div></div>}
+              </div>
+
+              <div className="rounded-xl border p-3 text-xs space-y-1.5">
+                <div className="text-[10px] font-semibold uppercase text-muted-foreground">Amount breakdown</div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Base amount</span><span>₹{Number(detailBooking.base_amount).toFixed(2)}</span></div>
+                {Number(detailBooking.discount_amount) > 0 && <div className="flex justify-between text-emerald-600"><span>Discount {detailBooking.coupon_code ? `(${detailBooking.coupon_code})` : ""}</span><span>−₹{Number(detailBooking.discount_amount).toFixed(2)}</span></div>}
+                <div className="flex justify-between"><span className="text-muted-foreground">Platform fee (15%)</span><span>₹{Number(detailBooking.platform_fee).toFixed(2)}</span></div>
+                <div className="flex justify-between font-semibold border-t pt-1.5"><span>Total</span><span>₹{Number(detailBooking.total_amount).toFixed(2)}</span></div>
+                <div className="flex justify-between text-emerald-600"><span>Expert earnings</span><span>₹{Number(detailBooking.expert_amount).toFixed(2)}</span></div>
+                <div className="flex justify-between text-muted-foreground"><span>Payment method</span><span>{detailBooking.payment_method}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Payment status</span><span className={cn("font-medium", detailBooking.payment_status === "PAID" ? "text-emerald-600" : "text-amber-600")}>{detailBooking.payment_status}</span></div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

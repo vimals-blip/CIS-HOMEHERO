@@ -1,4 +1,5 @@
 import { ExpertModel } from '../models/ExpertModel.js';
+import prisma from '../prisma.js';
 import { audit } from '../services/auditService.js';
 import { notify } from '../services/notificationService.js';
 import { isAdmin } from '../middleware/auth.js';
@@ -65,14 +66,38 @@ export const expertController = {
   // Admin verifies/approves or rejects an expert.
   async setVerified(req, res) {
     const { is_verified } = req.body;
-    if (typeof is_verified !== 'boolean') throw BadRequest('INVALID_BODY', 'is_verified must be a boolean.');
+    if (typeof is_verified !== ‘boolean’) throw BadRequest(‘INVALID_BODY’, ‘is_verified must be a boolean.’);
     const expert = await ExpertModel.findById(req.params.id);
-    if (!expert) throw NotFound('Expert not found.');
+    if (!expert) throw NotFound(‘Expert not found.’);
     await ExpertModel.setVerified(req.params.id, is_verified);
-    audit(req, is_verified ? 'EXPERT_VERIFIED' : 'EXPERT_REJECTED', { entityType: 'expert', entityId: req.params.id });
+    audit(req, is_verified ? ‘EXPERT_VERIFIED’ : ‘EXPERT_REJECTED’, { entityType: ‘expert’, entityId: req.params.id });
     await notify(req.params.id, is_verified
-      ? { type: 'expert_verified', title: 'You’re verified! 🎉', body: 'Your profile is approved — go online to start receiving jobs.' }
-      : { type: 'expert_rejected', title: 'Verification update', body: 'Your verification needs attention. Please review your KYC documents.' });
-    res.json({ status: 'updated', is_verified });
+      ? { type: ‘expert_verified’, title: "You’re verified!", body: ‘Your profile is approved — go online to start receiving jobs.’ }
+      : { type: ‘expert_rejected’, title: ‘Verification update’, body: ‘Your verification needs attention. Please review your KYC documents.’ });
+    res.json({ status: ‘updated’, is_verified });
+  },
+
+  async updateProfile(req, res) {
+    const { id } = req.params;
+    if (req.user.id !== id && !isAdmin(req.user)) throw Forbidden();
+    const { bio, gender, experience_years, avatar_url, name, city } = req.body;
+
+    const profileData = {};
+    if (name !== undefined) profileData.name = name;
+    if (city !== undefined) profileData.city = city;
+    if (avatar_url !== undefined) profileData.avatar_url = avatar_url;
+    if (Object.keys(profileData).length) {
+      await prisma.profiles.update({ where: { id }, data: profileData });
+    }
+
+    const expertData = {};
+    if (bio !== undefined) expertData.bio = bio;
+    if (gender !== undefined) expertData.gender = gender;
+    if (experience_years !== undefined) expertData.experience_years = Number(experience_years);
+    if (Object.keys(expertData).length) {
+      await prisma.experts.update({ where: { id }, data: expertData });
+    }
+
+    res.json({ status: ‘updated’ });
   },
 };
