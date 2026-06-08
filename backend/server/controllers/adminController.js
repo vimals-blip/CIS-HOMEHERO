@@ -317,4 +317,84 @@ export const adminController = {
       duration_hours: Number(booking.duration_hours),
     });
   },
+
+  async getReport(req, res) {
+    const { type = 'revenue' } = req.query;
+    const to = req.query.to ? new Date(req.query.to) : new Date();
+    const from = req.query.from ? new Date(req.query.from) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    to.setHours(23, 59, 59, 999);
+
+    const { Prisma } = await import('@prisma/client');
+    let data;
+
+    if (type === 'revenue') {
+      data = await prisma.$queryRaw(Prisma.sql`
+        SELECT DATE(created_at) AS date,
+          COUNT(*) AS bookings,
+          SUM(total_amount) AS revenue,
+          SUM(platform_fee) AS platform_fee,
+          SUM(expert_amount) AS expert_payout
+        FROM bookings
+        WHERE status = 'COMPLETED' AND created_at BETWEEN ${from} AND ${to}
+        GROUP BY DATE(created_at)
+        ORDER BY date ASC
+      `);
+      data = data.map(r => ({
+        date: r.date, bookings: Number(r.bookings),
+        revenue: Number(r.revenue), platform_fee: Number(r.platform_fee), expert_payout: Number(r.expert_payout),
+      }));
+    } else if (type === 'bookings') {
+      const byStatus = await prisma.$queryRaw(Prisma.sql`
+        SELECT status, COUNT(*) AS count FROM bookings
+        WHERE created_at BETWEEN ${from} AND ${to}
+        GROUP BY status ORDER BY count DESC
+      `);
+      const byService = await prisma.$queryRaw(Prisma.sql`
+        SELECT s.name AS service_name, COUNT(b.id) AS bookings, SUM(b.total_amount) AS revenue
+        FROM bookings b JOIN services s ON s.id = b.service_id
+        WHERE b.created_at BETWEEN ${from} AND ${to}
+        GROUP BY s.id, s.name ORDER BY bookings DESC
+      `);
+      data = {
+        by_status: byStatus.map(r => ({ status: r.status, count: Number(r.count) })),
+        by_service: byService.map(r => ({ service_name: r.service_name, bookings: Number(r.bookings), revenue: Number(r.revenue) })),
+      };
+    } else if (type === 'experts') {
+      data = await prisma.$queryRaw(Prisma.sql`
+        SELECT p.name, e.avg_rating, e.total_jobs,
+          COUNT(b.id) AS period_jobs,
+          COALESCE(SUM(b.expert_amount), 0) AS period_earnings
+        FROM experts e
+        JOIN profiles p ON p.id = e.id
+        LEFT JOIN bookings b ON b.expert_id = e.id AND b.status = 'COMPLETED' AND b.created_at BETWEEN ${from} AND ${to}
+        GROUP BY e.id, p.name, e.avg_rating, e.total_jobs
+        ORDER BY period_jobs DESC
+        LIMIT 20
+      `);
+      data = data.map(r => ({
+        name: r.name, avg_rating: Number(r.avg_rating), total_jobs: Number(r.total_jobs),
+        period_jobs: Number(r.period_jobs), period_earnings: Number(r.period_earnings),
+      }));
+    } else if (type === 'services') {
+      data = await prisma.$queryRaw(Prisma.sql`
+        SELECT s.name AS service_name, s.rate_per_hour, s.platform_fee_pct,
+          COUNT(b.id) AS bookings,
+          COALESCE(SUM(b.total_amount), 0) AS revenue,
+          COALESCE(SUM(b.platform_fee), 0) AS platform_earnings
+        FROM services s
+        LEFT JOIN bookings b ON b.service_id = s.id AND b.created_at BETWEEN ${from} AND ${to}
+        GROUP BY s.id, s.name, s.rate_per_hour, s.platform_fee_pct
+        ORDER BY bookings DESC
+      `);
+      data = data.map(r => ({
+        service_name: r.service_name, rate_per_hour: Number(r.rate_per_hour),
+        platform_fee_pct: Number(r.platform_fee_pct), bookings: Number(r.bookings),
+        revenue: Number(r.revenue), platform_earnings: Number(r.platform_earnings),
+      }));
+    } else {
+      throw BadRequest('INVALID_TYPE', 'type must be revenue, bookings, experts, or services');
+    }
+
+    res.json({ type, from: from.toISOString(), to: to.toISOString(), generated_at: new Date().toISOString(), data });
+  },
 };

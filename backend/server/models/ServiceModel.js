@@ -17,7 +17,7 @@ export const ServiceModel = {
     return prisma.services.findUnique({ where: { slug } });
   },
 
-  async create({ name, slug, tagline, description, iconName, imageUrl, ratePerHour, minHours, sortOrder }) {
+  async create({ name, slug, tagline, description, iconName, imageUrl, ratePerHour, minHours, platformFeePct, sortOrder }) {
     const id = `svc-${crypto.randomUUID()}`;
     await prisma.services.create({
       data: {
@@ -30,6 +30,7 @@ export const ServiceModel = {
         image_url: imageUrl ?? null,
         rate_per_hour: ratePerHour ?? 0,
         min_hours: minHours ?? 1,
+        platform_fee_pct: platformFeePct ?? 15,
         sort_order: sortOrder ?? 0,
         is_active: true,
       },
@@ -41,7 +42,7 @@ export const ServiceModel = {
     const map = {
       name: 'name', tagline: 'tagline', description: 'description', iconName: 'icon_name',
       imageUrl: 'image_url', ratePerHour: 'rate_per_hour', minHours: 'min_hours',
-      sortOrder: 'sort_order', isActive: 'is_active',
+      platformFeePct: 'platform_fee_pct', sortOrder: 'sort_order', isActive: 'is_active',
     };
     const data = {};
     for (const [key, col] of Object.entries(map)) {
@@ -49,5 +50,10 @@ export const ServiceModel = {
     }
     if (!Object.keys(data).length) return;
     await prisma.services.update({ where: { id }, data });
+  },
+
+  async delete(id) {
+    await prisma.expert_services.deleteMany({ where: { service_id: id } });
+    await prisma.services.delete({ where: { id } });
   },
 };

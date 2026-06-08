@@ -22,7 +22,6 @@ export const Route = createFileRoute("/book/$serviceId")({
 const HOUR_OPTIONS = [1, 2, 3, 4];
 const DAY_OPTIONS  = [1, 2, 3, 5, 7];
 const HRS_PER_DAY  = 8;
-const PLATFORM_FEE_PCT = 0.15;
 
 function Step({ n, title, hint }: { n: number; title: string; hint?: string }) {
   return (
@@ -97,6 +96,7 @@ function BookService() {
   if (!service) return <div className="container mx-auto px-4 py-16 text-center text-muted-foreground">Service not found.</div>;
 
   const Icon = serviceIcon(service.icon_name);
+  const PLATFORM_FEE_PCT = (Number(service.platform_fee_pct ?? 15)) / 100;
   const totalHours = durationUnit === "days" ? durationValue * HRS_PER_DAY : durationValue;
   const base = Number(service.rate_per_hour) * totalHours;
   const discount = coupon?.discount ?? 0;

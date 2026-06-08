@@ -16,7 +16,6 @@ import { BadRequest, Forbidden, NotFound } from '../errors.js';
 
 const VALID_PAYMENT_METHODS = ['CASH', 'WALLET', 'ONLINE'];
 
-const PLATFORM_FEE_PCT = 0.15;
 const round2 = (n) => Math.round(Number(n) * 100) / 100;
 const randomEta = () => 6 + Math.floor(Math.random() * 9); // 6–14 minutes
 
@@ -74,6 +73,39 @@ export const bookingController = {
     res.json({ ...format(booking), events });
   },
 
+  async getInvoice(req, res) {
+    const booking = await BookingModel.findById(req.params.id);
+    if (!booking) throw NotFound('Booking not found.');
+    if (!isAdmin(req.user) && booking.customer_id !== req.user.id && booking.expert_id !== req.user.id) {
+      throw Forbidden();
+    }
+    const base = Number(booking.base_amount);
+    const discount = Number(booking.discount_amount ?? 0);
+    const fee = Number(booking.platform_fee);
+    const total = Number(booking.total_amount);
+    const ratePerHour = Number(booking.duration_hours) > 0 ? round2(base / Number(booking.duration_hours)) : 0;
+    const lineItems = [
+      { description: `${booking.service_name} · ${Number(booking.duration_hours)} hr${Number(booking.duration_hours) !== 1 ? 's' : ''} @ ₹${ratePerHour}/hr`, amount: base },
+    ];
+    if (discount > 0) lineItems.push({ description: `Coupon discount (${booking.coupon_code})`, amount: -discount });
+    lineItems.push({ description: 'Platform fee', amount: fee });
+    res.json({
+      invoice_number: `INV-${booking.id.toUpperCase().slice(-8)}`,
+      issued_at: new Date().toISOString(),
+      booking: {
+        id: booking.id, service_name: booking.service_name, booking_type: booking.booking_type,
+        scheduled_at: booking.scheduled_at, duration_hours: Number(booking.duration_hours), status: booking.status,
+      },
+      customer: { name: booking.customer_name, phone: booking.customer_phone },
+      expert: { name: booking.expert_name },
+      address: booking.address_snapshot,
+      line_items: lineItems,
+      totals: { base, discount, platform_fee: fee, total },
+      payment: { method: booking.payment_method, status: booking.payment_status },
+      company: { name: 'HomeHero', tagline: 'Professional home services', email: 'support@homehero.in', phone: '+91-800-HOMEHERO' },
+    });
+  },
+
   async create(req, res) {
     const {
       service_id, duration_hours, booking_type = 'INSTANT', scheduled_at = null,
@@ -98,6 +130,7 @@ export const bookingController = {
     const service = await ServiceModel.findById(service_id);
     if (!service || !service.is_active) throw NotFound('Service not available.');
 
+    const PLATFORM_FEE_PCT = Number(service.platform_fee_pct ?? 15) / 100;
     const duration = Number(duration_hours);
     if (duration < Number(service.min_hours)) {
       throw BadRequest('DURATION_TOO_SHORT', `Minimum duration for this service is ${service.min_hours} hour(s).`);

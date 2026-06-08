@@ -5,7 +5,7 @@ import {
   LayoutDashboard, ShieldCheck, Users, Briefcase, Tag, Ticket,
   CheckCircle2, XCircle, Plus, RefreshCw, Search, IndianRupee,
   Star, BookOpen, Circle, AlertCircle, Wallet, LifeBuoy, Settings as SettingsIcon, Send, ArrowLeft,
-  ScrollText, KeyRound, FileText, ExternalLink, Trash2,
+  ScrollText, KeyRound, FileText, ExternalLink, Trash2, Pencil, BarChart2,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -30,7 +30,7 @@ export const Route = createFileRoute("/admin/")({
   component: AdminDashboard,
 });
 
-type Section = "overview" | "kyc" | "experts" | "bookings" | "users" | "services" | "coupons" | "settlements" | "support" | "settings" | "admins" | "audit";
+type Section = "overview" | "kyc" | "experts" | "bookings" | "users" | "services" | "coupons" | "settlements" | "support" | "reports" | "settings" | "admins" | "audit";
 
 const STATUS_PILL: Record<string, string> = {
   SEARCHING:   "bg-amber-50 text-amber-700 ring-1 ring-amber-200",
@@ -59,6 +59,7 @@ const NAV: { id: Section; label: string; icon: any; badge?: (d: any) => number; 
   { id: "coupons",  label: "Coupons", icon: Ticket },
   { id: "settlements", label: "Settlements", icon: Wallet },
   { id: "support", label: "Support", icon: LifeBuoy },
+  { id: "reports", label: "Reports", icon: FileText },
   { id: "settings", label: "Settings", icon: SettingsIcon, superOnly: true },
   { id: "admins", label: "Admins", icon: ShieldCheck, superOnly: true },
   { id: "audit", label: "Audit Log", icon: ScrollText, superOnly: true },
@@ -141,7 +142,14 @@ function AdminDashboard() {
   const [couponOpen, setCouponOpen] = useState(false);
   const [couponForm, setCouponForm] = useState({ code: "", type: "FLAT", value: "", max_uses: "" });
   const [svcOpen, setSvcOpen] = useState(false);
-  const [svcForm, setSvcForm] = useState({ name: "", slug: "", tagline: "", rate_per_hour: "", icon_name: "Sparkles" });
+  const [editSvcId, setEditSvcId] = useState<string | null>(null);
+  const BLANK_SVC = { name: "", slug: "", tagline: "", description: "", rate_per_hour: "", min_hours: "1", platform_fee_pct: "15", icon_name: "Sparkles", sort_order: "0", is_active: true };
+  const [svcForm, setSvcForm] = useState<typeof BLANK_SVC>(BLANK_SVC);
+  const [reportType, setReportType] = useState("revenue");
+  const toDateStr = (d: Date) => d.toISOString().slice(0, 10);
+  const [reportFrom, setReportFrom] = useState(() => toDateStr(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)));
+  const [reportTo, setReportTo] = useState(() => toDateStr(new Date()));
+  const [reportTriggered, setReportTriggered] = useState(false);
 
   useEffect(() => {
     if (!loading) {
@@ -180,6 +188,18 @@ function AdminDashboard() {
   });
   const { data: withdrawals = [], isLoading: wdLoading } = useQuery({
     enabled: isAdmin && section === "settlements", queryKey: ["admin-withdrawals"], queryFn: () => apiFetch("/admin/withdrawals"),
+  });
+
+  const { data: allServices = [], isLoading: servicesLoading, refetch: refetchServices } = useQuery({
+    enabled: isAdmin && section === "services",
+    queryKey: ["admin-services"],
+    queryFn: () => apiFetch("/services?all=true"),
+  });
+
+  const { data: reportData, isLoading: reportLoading, refetch: fetchReport } = useQuery({
+    enabled: false,
+    queryKey: ["admin-report", reportType, reportFrom, reportTo],
+    queryFn: () => apiFetch(`/admin/reports?type=${reportType}&from=${reportFrom}&to=${reportTo}`),
   });
 
   const actWithdrawal = useMutation({
@@ -407,9 +427,26 @@ function AdminDashboard() {
   const createService = useMutation({
     mutationFn: (body: object) => apiFetch("/services", { method: "POST", body: JSON.stringify(body) }),
     onSuccess: () => {
-      toast.success("Service created"); setSvcOpen(false);
-      setSvcForm({ name: "", slug: "", tagline: "", rate_per_hour: "", icon_name: "Sparkles" });
-      qc.invalidateQueries({ queryKey: ["admin-overview"] });
+      toast.success("Service created"); setSvcOpen(false); setEditSvcId(null); setSvcForm(BLANK_SVC);
+      qc.invalidateQueries({ queryKey: ["admin-overview"] }); qc.invalidateQueries({ queryKey: ["admin-services"] });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const updateService = useMutation({
+    mutationFn: ({ id, ...body }: { id: string; [k: string]: any }) => apiFetch(`/services/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+    onSuccess: () => {
+      toast.success("Service updated"); setSvcOpen(false); setEditSvcId(null); setSvcForm(BLANK_SVC);
+      qc.invalidateQueries({ queryKey: ["admin-overview"] }); qc.invalidateQueries({ queryKey: ["admin-services"] });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const deleteService = useMutation({
+    mutationFn: (id: string) => apiFetch(`/services/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      toast.success("Service deleted");
+      qc.invalidateQueries({ queryKey: ["admin-overview"] }); qc.invalidateQueries({ queryKey: ["admin-services"] });
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -939,51 +976,110 @@ function AdminDashboard() {
 
           {section === "services" && (
             <div>
-              <SectionHead title="Services" desc="Manage household services on the platform"
+              <SectionHead title="Services" desc="Manage household services, pricing, and platform fee per service"
                 action={
-                  <Dialog open={svcOpen} onOpenChange={setSvcOpen}>
-                    <DialogTrigger asChild><Button size="sm"><Plus className="mr-1.5 h-3.5 w-3.5" /> Add Service</Button></DialogTrigger>
-                    <DialogContent className="max-w-sm">
-                      <DialogHeader><DialogTitle>New Service</DialogTitle></DialogHeader>
-                      <div className="mt-2 space-y-3">
-                        <div><Label>Name</Label><Input value={svcForm.name} onChange={(e) => setSvcForm({ ...svcForm, name: e.target.value })} placeholder="e.g. Pet Care" className="mt-1" /></div>
-                        <div><Label>Slug</Label><Input value={svcForm.slug} onChange={(e) => setSvcForm({ ...svcForm, slug: e.target.value })} placeholder="pet-care" className="mt-1" /></div>
-                        <div><Label>Tagline</Label><Input value={svcForm.tagline} onChange={(e) => setSvcForm({ ...svcForm, tagline: e.target.value })} className="mt-1" /></div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div><Label>Rate/hr (₹)</Label><Input type="number" value={svcForm.rate_per_hour} onChange={(e) => setSvcForm({ ...svcForm, rate_per_hour: e.target.value })} className="mt-1" /></div>
-                          <div><Label>Icon</Label>
-                            <Select value={svcForm.icon_name} onValueChange={(v) => setSvcForm({ ...svcForm, icon_name: v })}>
-                              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                              <SelectContent>{["Sparkles","Utensils","CookingPot","ShowerHead","Shirt","ChefHat","Brush","WashingMachine"].map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-                        <Button className="mt-2 w-full" disabled={createService.isPending} onClick={() => {
-                          if (!svcForm.name || !svcForm.slug || !svcForm.rate_per_hour) { toast.error("Name, slug and rate are required"); return; }
-                          createService.mutate({ name: svcForm.name, slug: svcForm.slug, tagline: svcForm.tagline, rate_per_hour: Number(svcForm.rate_per_hour), icon_name: svcForm.icon_name });
-                        }}>{createService.isPending ? "Creating…" : "Create Service"}</Button>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
+                  <Button size="sm" onClick={() => { setEditSvcId(null); setSvcForm(BLANK_SVC); setSvcOpen(true); }}>
+                    <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Service
+                  </Button>
                 } />
-              <div className="overflow-hidden rounded-2xl border bg-card">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/30 text-xs font-medium text-muted-foreground">
-                    <tr><th className="px-5 py-3.5 text-left">Service</th><th className="px-5 py-3.5 text-left">Rate/hr</th><th className="px-5 py-3.5 text-left">Status</th><th className="px-5 py-3.5 text-right">Action</th></tr>
-                  </thead>
-                  <tbody>
-                    {(data?.services ?? []).length === 0 ? <tr><td colSpan={4} className="py-12 text-center text-muted-foreground">No services</td></tr> :
-                      (data?.services ?? []).map((s: any) => (
-                        <tr key={s.id} className="border-t hover:bg-muted/20">
-                          <td className="px-5 py-3"><div className="font-medium">{s.name}</div><div className="text-xs text-muted-foreground">{s.tagline}</div></td>
-                          <td className="px-5 py-3 font-semibold">₹{Number(s.rate_per_hour).toLocaleString("en-IN")}</td>
-                          <td className="px-5 py-3">{s.is_active ? <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600"><Circle className="h-2 w-2 fill-emerald-500 text-emerald-500" />Active</span> : <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground"><Circle className="h-2 w-2 fill-slate-300 text-slate-300" />Disabled</span>}</td>
-                          <td className="px-5 py-3 text-right"><Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => toggleService.mutate({ id: s.id, is_active: !s.is_active })}>{s.is_active ? "Disable" : "Enable"}</Button></td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              </div>
+              <Dialog open={svcOpen} onOpenChange={(v) => { setSvcOpen(v); if (!v) { setEditSvcId(null); setSvcForm(BLANK_SVC); } }}>
+                <DialogContent className="max-w-lg">
+                  <DialogHeader><DialogTitle>{editSvcId ? "Edit Service" : "New Service"}</DialogTitle></DialogHeader>
+                  <div className="mt-2 space-y-3 max-h-[70vh] overflow-y-auto pr-1">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="col-span-2"><Label>Name *</Label><Input value={svcForm.name} onChange={(e) => { const n = e.target.value; setSvcForm((f) => ({ ...f, name: n, slug: editSvcId ? f.slug : n.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") })); }} placeholder="e.g. Pet Care" className="mt-1" /></div>
+                      <div className="col-span-2"><Label>Slug *</Label><Input value={svcForm.slug} onChange={(e) => setSvcForm({ ...svcForm, slug: e.target.value })} placeholder="pet-care" className="mt-1 font-mono text-sm" /></div>
+                      <div className="col-span-2"><Label>Tagline</Label><Input value={svcForm.tagline} onChange={(e) => setSvcForm({ ...svcForm, tagline: e.target.value })} className="mt-1" /></div>
+                      <div className="col-span-2"><Label>Description</Label><Textarea value={svcForm.description} onChange={(e) => setSvcForm({ ...svcForm, description: e.target.value })} rows={2} className="mt-1" /></div>
+                      <div><Label>Rate/hr (₹) *</Label><Input type="number" min={0} value={svcForm.rate_per_hour} onChange={(e) => setSvcForm({ ...svcForm, rate_per_hour: e.target.value })} className="mt-1" /></div>
+                      <div><Label>Min hours</Label><Input type="number" min={0.5} step={0.5} value={svcForm.min_hours} onChange={(e) => setSvcForm({ ...svcForm, min_hours: e.target.value })} className="mt-1" /></div>
+                      <div><Label>Platform fee %</Label><Input type="number" min={0} max={100} value={svcForm.platform_fee_pct} onChange={(e) => setSvcForm({ ...svcForm, platform_fee_pct: e.target.value })} className="mt-1" /></div>
+                      <div><Label>Sort order</Label><Input type="number" min={0} value={svcForm.sort_order} onChange={(e) => setSvcForm({ ...svcForm, sort_order: e.target.value })} className="mt-1" /></div>
+                      <div><Label>Icon name</Label>
+                        <Select value={svcForm.icon_name} onValueChange={(v) => setSvcForm({ ...svcForm, icon_name: v })}>
+                          <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                          <SelectContent>{["Sparkles","Utensils","CookingPot","ShowerHead","Shirt","ChefHat","Brush","WashingMachine","Home","Star","Wrench","Package"].map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex items-center gap-2 pt-6">
+                        <input type="checkbox" id="svc-active" checked={svcForm.is_active} onChange={(e) => setSvcForm({ ...svcForm, is_active: e.target.checked })} className="h-4 w-4 accent-primary" />
+                        <Label htmlFor="svc-active">Active (visible to customers)</Label>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 pt-1">
+                      <Button className="flex-1" disabled={createService.isPending || updateService.isPending} onClick={() => {
+                        if (!svcForm.name || !svcForm.slug || !svcForm.rate_per_hour) { toast.error("Name, slug and rate are required"); return; }
+                        const payload = {
+                          name: svcForm.name, slug: svcForm.slug, tagline: svcForm.tagline || undefined,
+                          description: svcForm.description || undefined, rate_per_hour: Number(svcForm.rate_per_hour),
+                          min_hours: Number(svcForm.min_hours), platform_fee_pct: Number(svcForm.platform_fee_pct),
+                          icon_name: svcForm.icon_name, sort_order: Number(svcForm.sort_order), is_active: svcForm.is_active,
+                        };
+                        if (editSvcId) updateService.mutate({ id: editSvcId, ...payload });
+                        else createService.mutate(payload);
+                      }}>{createService.isPending || updateService.isPending ? "Saving…" : editSvcId ? "Save changes" : "Create Service"}</Button>
+                      <Button variant="outline" onClick={() => { setSvcOpen(false); setEditSvcId(null); setSvcForm(BLANK_SVC); }}>Cancel</Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
+
+              {servicesLoading ? <div className="py-12 text-center"><LoadingSpinner /></div> : (
+                <div className="overflow-hidden rounded-2xl border bg-card">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/30 text-xs font-medium text-muted-foreground">
+                      <tr>
+                        <th className="px-5 py-3.5 text-left">Service</th>
+                        <th className="px-5 py-3.5 text-left">Rate/hr</th>
+                        <th className="px-5 py-3.5 text-left">Min hrs</th>
+                        <th className="px-5 py-3.5 text-left">Platform fee</th>
+                        <th className="px-5 py-3.5 text-left">Status</th>
+                        <th className="px-5 py-3.5 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(allServices as any[]).length === 0 ? <tr><td colSpan={6} className="py-12 text-center text-muted-foreground">No services yet</td></tr> :
+                        (allServices as any[]).map((s: any) => (
+                          <tr key={s.id} className="border-t hover:bg-muted/20">
+                            <td className="px-5 py-3">
+                              <div className="font-medium">{s.name}</div>
+                              <div className="text-xs text-muted-foreground">{s.slug}</div>
+                              {s.tagline && <div className="text-xs text-muted-foreground italic">{s.tagline}</div>}
+                            </td>
+                            <td className="px-5 py-3 font-semibold">₹{Number(s.rate_per_hour).toLocaleString("en-IN")}</td>
+                            <td className="px-5 py-3">{Number(s.min_hours)} hr{Number(s.min_hours) !== 1 ? "s" : ""}</td>
+                            <td className="px-5 py-3">
+                              <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2 py-0.5 text-xs font-semibold text-violet-700 ring-1 ring-violet-200">
+                                {Number(s.platform_fee_pct ?? 15)}%
+                              </span>
+                            </td>
+                            <td className="px-5 py-3">
+                              <button onClick={() => toggleService.mutate({ id: s.id, is_active: !s.is_active })} className={cn("inline-flex items-center gap-1 text-xs font-medium", s.is_active ? "text-emerald-600" : "text-muted-foreground")}>
+                                <Circle className={cn("h-2 w-2", s.is_active ? "fill-emerald-500 text-emerald-500" : "fill-slate-300 text-slate-300")} />
+                                {s.is_active ? "Active" : "Disabled"}
+                              </button>
+                            </td>
+                            <td className="px-5 py-3 text-right">
+                              <div className="inline-flex gap-1">
+                                <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => {
+                                  setEditSvcId(s.id);
+                                  setSvcForm({ name: s.name, slug: s.slug, tagline: s.tagline ?? "", description: s.description ?? "", rate_per_hour: String(s.rate_per_hour), min_hours: String(s.min_hours), platform_fee_pct: String(s.platform_fee_pct ?? 15), icon_name: s.icon_name ?? "Sparkles", sort_order: String(s.sort_order ?? 0), is_active: Boolean(s.is_active) });
+                                  setSvcOpen(true);
+                                }}><Pencil className="h-3.5 w-3.5" /></Button>
+                                {isSuperAdmin && (
+                                  <Button size="sm" variant="outline" className="h-7 px-2 border-red-200 text-red-600 hover:bg-red-50" disabled={deleteService.isPending}
+                                    onClick={() => { if (confirm(`Delete "${s.name}"? This cannot be undone.`)) deleteService.mutate(s.id); }}>
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
 
@@ -1266,6 +1362,165 @@ function AdminDashboard() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {section === "reports" && (
+            <div>
+              <SectionHead title="Reports" desc="Generate and print platform reports" />
+
+              {/* Controls */}
+              <div className="mb-6 flex flex-wrap items-end gap-3 rounded-2xl border bg-card p-4">
+                <div>
+                  <Label className="text-xs">Report type</Label>
+                  <Select value={reportType} onValueChange={setReportType}>
+                    <SelectTrigger className="mt-1 w-44"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="revenue">Revenue (daily)</SelectItem>
+                      <SelectItem value="bookings">Bookings breakdown</SelectItem>
+                      <SelectItem value="experts">Top experts</SelectItem>
+                      <SelectItem value="services">Services summary</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">From</Label>
+                  <Input type="date" value={reportFrom} onChange={(e) => setReportFrom(e.target.value)} className="mt-1 w-40" />
+                </div>
+                <div>
+                  <Label className="text-xs">To</Label>
+                  <Input type="date" value={reportTo} onChange={(e) => setReportTo(e.target.value)} className="mt-1 w-40" />
+                </div>
+                <Button onClick={() => { setReportTriggered(true); fetchReport(); }} disabled={reportLoading}>
+                  <BarChart2 className="mr-1.5 h-4 w-4" /> {reportLoading ? "Loading…" : "Generate"}
+                </Button>
+                {reportData && (
+                  <Button variant="outline" onClick={() => window.print()}>
+                    <FileText className="mr-1.5 h-4 w-4" /> Print report
+                  </Button>
+                )}
+              </div>
+
+              {/* Print styles */}
+              <style>{`@media print { .no-print { display: none !important; } }`}</style>
+
+              {reportLoading && <div className="flex h-40 items-center justify-center"><LoadingSpinner /></div>}
+
+              {!reportLoading && reportTriggered && reportData && (
+                <div id="report-print-area">
+                  <div className="mb-4 text-xs text-muted-foreground">
+                    Report: <strong>{reportData.type}</strong> · {new Date(reportData.from).toLocaleDateString("en-IN")} – {new Date(reportData.to).toLocaleDateString("en-IN")} · Generated {new Date(reportData.generated_at).toLocaleString("en-IN")}
+                  </div>
+
+                  {/* Revenue report */}
+                  {reportData.type === "revenue" && (
+                    <div className="overflow-hidden rounded-2xl border bg-card">
+                      <table className="w-full text-sm">
+                        <thead className="bg-muted/30 text-xs font-medium text-muted-foreground">
+                          <tr><th className="px-4 py-3 text-left">Date</th><th className="px-4 py-3 text-right">Bookings</th><th className="px-4 py-3 text-right">Revenue (₹)</th><th className="px-4 py-3 text-right">Platform fee (₹)</th><th className="px-4 py-3 text-right">Expert payout (₹)</th></tr>
+                        </thead>
+                        <tbody>
+                          {(reportData.data as any[]).length === 0 ? <tr><td colSpan={5} className="py-12 text-center text-muted-foreground">No completed bookings in this period</td></tr> :
+                            (reportData.data as any[]).map((r: any) => (
+                              <tr key={r.date} className="border-t hover:bg-muted/20">
+                                <td className="px-4 py-3">{new Date(r.date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</td>
+                                <td className="px-4 py-3 text-right">{r.bookings}</td>
+                                <td className="px-4 py-3 text-right font-semibold">₹{Number(r.revenue).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                                <td className="px-4 py-3 text-right text-violet-700">₹{Number(r.platform_fee).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                                <td className="px-4 py-3 text-right">₹{Number(r.expert_payout).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                              </tr>
+                            ))}
+                        </tbody>
+                        {(reportData.data as any[]).length > 0 && (
+                          <tfoot className="border-t bg-muted/20 font-semibold text-sm">
+                            <tr>
+                              <td className="px-4 py-3">Total</td>
+                              <td className="px-4 py-3 text-right">{(reportData.data as any[]).reduce((s: number, r: any) => s + r.bookings, 0)}</td>
+                              <td className="px-4 py-3 text-right">₹{(reportData.data as any[]).reduce((s: number, r: any) => s + r.revenue, 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                              <td className="px-4 py-3 text-right text-violet-700">₹{(reportData.data as any[]).reduce((s: number, r: any) => s + r.platform_fee, 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                              <td className="px-4 py-3 text-right">₹{(reportData.data as any[]).reduce((s: number, r: any) => s + r.expert_payout, 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                            </tr>
+                          </tfoot>
+                        )}
+                      </table>
+                    </div>
+                  )}
+
+                  {/* Bookings breakdown */}
+                  {reportData.type === "bookings" && (
+                    <div className="space-y-4">
+                      <div className="overflow-hidden rounded-2xl border bg-card">
+                        <div className="border-b bg-muted/30 px-4 py-2 text-xs font-semibold uppercase text-muted-foreground">By status</div>
+                        <table className="w-full text-sm">
+                          <thead><tr className="border-b"><th className="px-4 py-3 text-left text-muted-foreground">Status</th><th className="px-4 py-3 text-right text-muted-foreground">Count</th></tr></thead>
+                          <tbody>{(reportData.data.by_status as any[]).map((r: any) => <tr key={r.status} className="border-t hover:bg-muted/20"><td className="px-4 py-3"><span className={cn("inline-block rounded-full px-2 py-0.5 text-xs font-medium", STATUS_PILL[r.status] ?? "bg-slate-100 text-slate-700")}>{r.status}</span></td><td className="px-4 py-3 text-right font-semibold">{r.count}</td></tr>)}</tbody>
+                        </table>
+                      </div>
+                      <div className="overflow-hidden rounded-2xl border bg-card">
+                        <div className="border-b bg-muted/30 px-4 py-2 text-xs font-semibold uppercase text-muted-foreground">By service</div>
+                        <table className="w-full text-sm">
+                          <thead><tr className="border-b"><th className="px-4 py-3 text-left text-muted-foreground">Service</th><th className="px-4 py-3 text-right text-muted-foreground">Bookings</th><th className="px-4 py-3 text-right text-muted-foreground">Revenue (₹)</th></tr></thead>
+                          <tbody>{(reportData.data.by_service as any[]).map((r: any) => <tr key={r.service_name} className="border-t hover:bg-muted/20"><td className="px-4 py-3 font-medium">{r.service_name}</td><td className="px-4 py-3 text-right">{r.bookings}</td><td className="px-4 py-3 text-right font-semibold">₹{Number(r.revenue).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td></tr>)}</tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Top experts */}
+                  {reportData.type === "experts" && (
+                    <div className="overflow-hidden rounded-2xl border bg-card">
+                      <table className="w-full text-sm">
+                        <thead className="bg-muted/30 text-xs font-medium text-muted-foreground">
+                          <tr><th className="px-4 py-3 text-left">Expert</th><th className="px-4 py-3 text-right">Rating</th><th className="px-4 py-3 text-right">Total jobs</th><th className="px-4 py-3 text-right">Period jobs</th><th className="px-4 py-3 text-right">Period earnings (₹)</th></tr>
+                        </thead>
+                        <tbody>
+                          {(reportData.data as any[]).length === 0 ? <tr><td colSpan={5} className="py-12 text-center text-muted-foreground">No data</td></tr> :
+                            (reportData.data as any[]).map((r: any, i: number) => (
+                              <tr key={i} className="border-t hover:bg-muted/20">
+                                <td className="px-4 py-3 font-medium">{r.name ?? "—"}</td>
+                                <td className="px-4 py-3 text-right"><span className="flex items-center justify-end gap-1"><Star className="h-3 w-3 fill-amber-400 text-amber-400" />{Number(r.avg_rating).toFixed(1)}</span></td>
+                                <td className="px-4 py-3 text-right">{r.total_jobs}</td>
+                                <td className="px-4 py-3 text-right font-semibold text-primary">{r.period_jobs}</td>
+                                <td className="px-4 py-3 text-right">₹{Number(r.period_earnings).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {/* Services summary */}
+                  {reportData.type === "services" && (
+                    <div className="overflow-hidden rounded-2xl border bg-card">
+                      <table className="w-full text-sm">
+                        <thead className="bg-muted/30 text-xs font-medium text-muted-foreground">
+                          <tr><th className="px-4 py-3 text-left">Service</th><th className="px-4 py-3 text-right">Rate/hr</th><th className="px-4 py-3 text-right">Fee %</th><th className="px-4 py-3 text-right">Bookings</th><th className="px-4 py-3 text-right">Revenue (₹)</th><th className="px-4 py-3 text-right">Platform earnings (₹)</th></tr>
+                        </thead>
+                        <tbody>
+                          {(reportData.data as any[]).length === 0 ? <tr><td colSpan={6} className="py-12 text-center text-muted-foreground">No data</td></tr> :
+                            (reportData.data as any[]).map((r: any, i: number) => (
+                              <tr key={i} className="border-t hover:bg-muted/20">
+                                <td className="px-4 py-3 font-medium">{r.service_name}</td>
+                                <td className="px-4 py-3 text-right">₹{Number(r.rate_per_hour).toLocaleString("en-IN")}</td>
+                                <td className="px-4 py-3 text-right"><span className="rounded-full bg-violet-50 px-2 py-0.5 text-xs font-semibold text-violet-700 ring-1 ring-violet-200">{r.platform_fee_pct}%</span></td>
+                                <td className="px-4 py-3 text-right">{r.bookings}</td>
+                                <td className="px-4 py-3 text-right font-semibold">₹{Number(r.revenue).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                                <td className="px-4 py-3 text-right text-violet-700">₹{Number(r.platform_earnings).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {!reportLoading && !reportTriggered && (
+                <div className="flex flex-col items-center gap-3 rounded-2xl border bg-muted/10 py-20 text-muted-foreground">
+                  <BarChart2 className="h-10 w-10" />
+                  <p className="text-sm">Select a report type and date range, then click Generate</p>
                 </div>
               )}
             </div>

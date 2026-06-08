@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Clock, Star, Phone, ShieldCheck, ArrowLeft } from "lucide-react";
+import { Clock, Star, Phone, ShieldCheck, ArrowLeft, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -194,6 +194,11 @@ function TrackBooking() {
           {booking.status === "COMPLETED" && (
             <Button className="w-full" onClick={() => setReviewOpen(true)}>
               <Star className="mr-1 h-4 w-4" /> Rate your expert
+            </Button>
+          )}
+          {booking.status === "COMPLETED" && (
+            <Button variant="outline" className="w-full" onClick={() => window.open(`/invoice/${bookingId}`, "_blank")}>
+              <FileText className="mr-1 h-4 w-4" /> View invoice
             </Button>
           )}
         </div>

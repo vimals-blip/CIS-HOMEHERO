@@ -15,6 +15,7 @@ function format(row) {
     image_url: row.image_url,
     rate_per_hour: Number(row.rate_per_hour),
     min_hours: Number(row.min_hours),
+    platform_fee_pct: Number(row.platform_fee_pct ?? 15),
     sort_order: row.sort_order,
     is_active: Boolean(row.is_active),
   };
@@ -35,7 +36,7 @@ export const serviceController = {
 
   // Admin
   async create(req, res) {
-    const { name, slug, tagline, description, icon_name, image_url, rate_per_hour, min_hours, sort_order } = req.body;
+    const { name, slug, tagline, description, icon_name, image_url, rate_per_hour, min_hours, platform_fee_pct, sort_order } = req.body;
     if (!name || !slug || rate_per_hour == null) {
       throw BadRequest('MISSING_FIELDS', 'name, slug and rate_per_hour are required.');
     }
@@ -43,7 +44,8 @@ export const serviceController = {
     if (existing) throw BadRequest('SLUG_TAKEN', 'A service with this slug already exists.');
     const id = await ServiceModel.create({
       name, slug, tagline, description, iconName: icon_name, imageUrl: image_url,
-      ratePerHour: rate_per_hour, minHours: min_hours, sortOrder: sort_order,
+      ratePerHour: rate_per_hour, minHours: min_hours, platformFeePct: platform_fee_pct,
+      sortOrder: sort_order,
     });
     await bustCache(SERVICES_CACHE_PREFIX);
     res.status(201).json({ id });
@@ -57,9 +59,19 @@ export const serviceController = {
     await ServiceModel.update(req.params.id, {
       name: b.name, tagline: b.tagline, description: b.description, iconName: b.icon_name,
       imageUrl: b.image_url, ratePerHour: b.rate_per_hour, minHours: b.min_hours,
-      sortOrder: b.sort_order, isActive: b.is_active === undefined ? undefined : Boolean(b.is_active),
+      platformFeePct: b.platform_fee_pct, sortOrder: b.sort_order,
+      isActive: b.is_active === undefined ? undefined : Boolean(b.is_active),
     });
     await bustCache(SERVICES_CACHE_PREFIX);
     res.json({ status: 'updated' });
+  },
+
+  // Super-admin
+  async delete(req, res) {
+    const existing = await ServiceModel.findById(req.params.id);
+    if (!existing) throw NotFound('Service not found.');
+    await ServiceModel.delete(req.params.id);
+    await bustCache(SERVICES_CACHE_PREFIX);
+    res.json({ status: 'deleted' });
   },
 };
