@@ -154,7 +154,7 @@ function BookService() {
       service_id: serviceId, duration_hours: totalHours, booking_type: type,
       payment_method: paymentMethod, coupon_code: coupon?.code ?? null, notes: notes.trim() || null,
     };
-    if (type === "SCHEDULED") body.scheduled_at = scheduledAt.replace("T", " ") + ":00";
+    if (type === "SCHEDULED") body.scheduled_at = scheduledAt + ":00";
     if (preferredExpertId) body.preferred_expert_id = preferredExpertId;
 
     if (selectedAddr) {

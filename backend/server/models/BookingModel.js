@@ -25,7 +25,7 @@ export const BookingModel = {
         expert_id: data.expertId ?? null,
         service_id: data.serviceId,
         booking_type: data.bookingType,
-        scheduled_at: data.scheduledAt ?? null,
+        scheduled_at: data.scheduledAt ? new Date(data.scheduledAt) : null,
         duration_hours: data.durationHours,
         status: data.status,
         eta_minutes: data.etaMinutes ?? null,
