@@ -1,10 +1,11 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { Wallet, Briefcase, Star, TrendingUp, Wifi, WifiOff, MapPin, Clock, ShieldAlert, BanknoteArrowDown, Upload, CheckCircle2, XCircle, Clock3, FileUp, Loader2 } from "lucide-react";
+import { Wallet, Briefcase, Star, TrendingUp, Wifi, WifiOff, MapPin, Clock, ShieldAlert, BanknoteArrowDown, Upload, CheckCircle2, XCircle, Clock3, FileUp, Loader2, Navigation } from "lucide-react";
 import { apiFetch, uploadFile } from "@/lib/api";
 import { getSocket } from "@/lib/socket";
 import { useAuth } from "@/lib/auth-context";
+import { LiveMap } from "@/components/booking/LiveMap";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { StatusBadge } from "@/components/shared/StatusBadge";
@@ -43,6 +44,7 @@ function ExpertDashboard() {
   const router = useRouter();
   const qc = useQueryClient();
   const [isOnline, setIsOnline] = useState<boolean | null>(null);
+  const [myLoc, setMyLoc] = useState<{ lat: number; lng: number } | null>(null);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [wdAmount, setWdAmount] = useState("");
   const [uploadingType, setUploadingType] = useState<string | null>(null);
@@ -83,14 +85,18 @@ function ExpertDashboard() {
     // Use real GPS when available; otherwise a jittered city-centre mock.
     const base = { lat: 12.9716, lng: 77.5946 };
     const emit = () => {
+      const broadcast = (loc: { lat: number; lng: number }) => {
+        socket.emit("expert_location", loc);
+        setMyLoc(loc);
+      };
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
-          (pos) => socket.emit("expert_location", { lat: pos.coords.latitude, lng: pos.coords.longitude }),
-          () => socket.emit("expert_location", { lat: base.lat + (Math.random() - 0.5) * 0.02, lng: base.lng + (Math.random() - 0.5) * 0.02 }),
+          (pos) => broadcast({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+          () => broadcast({ lat: base.lat + (Math.random() - 0.5) * 0.02, lng: base.lng + (Math.random() - 0.5) * 0.02 }),
           { maximumAge: 15000, timeout: 5000 },
         );
       } else {
-        socket.emit("expert_location", { lat: base.lat + (Math.random() - 0.5) * 0.02, lng: base.lng + (Math.random() - 0.5) * 0.02 });
+        broadcast({ lat: base.lat + (Math.random() - 0.5) * 0.02, lng: base.lng + (Math.random() - 0.5) * 0.02 });
       }
     };
     emit();
@@ -383,6 +389,25 @@ function ExpertDashboard() {
                       </div>
                     </div>
                   </div>
+                  {/* Live navigation map — shows once the expert is on the way */}
+                  {["ON_THE_WAY", "ARRIVED", "IN_PROGRESS"].includes(j.status) && (myLoc || (j.lat && j.lng)) && (
+                    <div className="border-t">
+                      <LiveMap
+                        height={220}
+                        expert={myLoc}
+                        dest={j.lat && j.lng ? { lat: Number(j.lat), lng: Number(j.lng) } : null}
+                      />
+                      <div className="flex items-center gap-1.5 px-5 py-2 text-xs font-medium text-muted-foreground">
+                        <Navigation className="h-3.5 w-3.5 text-primary" />
+                        {myLoc ? (
+                          <span className="text-emerald-600 font-semibold">Your live location is on</span>
+                        ) : (
+                          <span>Enable location for live navigation</span>
+                        )}
+                        {j.lat && j.lng && <span className="ml-auto">Destination pinned</span>}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             );

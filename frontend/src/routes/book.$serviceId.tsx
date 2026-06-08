@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Zap, CalendarClock, MapPin, Plus, Check, Tag, Wallet, Banknote, CreditCard, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -40,6 +40,19 @@ function BookService() {
   const { serviceId } = Route.useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+
+  const [geoCoords, setGeoCoords] = useState<{ lat: number; lng: number } | null>(null);
+
+  // Silently capture browser geolocation to attach coordinates to the booking.
+  // Used as the destination for the live-tracking map.
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => setGeoCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => {}, // permission denied or unavailable — booking still works without coords
+      { maximumAge: 60000, timeout: 8000 },
+    );
+  }, []);
 
   const [durationUnit, setDurationUnit] = useState<"hours" | "days">("hours");
   const [durationValue, setDurationValue] = useState(1); // hrs or days depending on unit
@@ -134,6 +147,7 @@ function BookService() {
       }
       body.address_snapshot = [addr.flat, addr.address_line, addr.city, addr.pincode].filter(Boolean).join(", ");
       body.pincode = addr.pincode.trim();
+      if (geoCoords) { body.lat = geoCoords.lat; body.lng = geoCoords.lng; }
     }
 
     setSubmitting(true);

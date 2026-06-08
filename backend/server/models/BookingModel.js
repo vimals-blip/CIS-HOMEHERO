@@ -6,6 +6,7 @@ const BOOKING_SELECT = Prisma.sql`
   SELECT b.*,
     s.name AS service_name, s.slug AS service_slug, s.icon_name AS service_icon, s.image_url AS service_image,
     ep.name AS expert_name, ep.avatar_url AS expert_avatar, e.avg_rating AS expert_rating,
+    e.current_lat AS expert_lat, e.current_lng AS expert_lng,
     cust.name AS customer_name, cust.phone AS customer_phone, cust.avatar_url AS customer_avatar
   FROM bookings b
   LEFT JOIN services s ON s.id = b.service_id

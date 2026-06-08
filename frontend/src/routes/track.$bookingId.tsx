@@ -43,6 +43,15 @@ function TrackBooking() {
     refetchInterval: (q) => (ACTIVE.includes((q.state.data as any)?.status) ? 15000 : false),
   });
 
+  // Seed initial expert position from the booking's stored current_lat/lng so the
+  // map renders immediately instead of waiting up to 10 s for the first socket ping.
+  useEffect(() => {
+    if (booking?.expert_lat && booking?.expert_lng && !expertLoc) {
+      setExpertLoc({ lat: Number(booking.expert_lat), lng: Number(booking.expert_lng) });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [booking?.expert_lat, booking?.expert_lng]);
+
   // Live updates via Socket.IO — refetch on any booking event for this booking.
   useEffect(() => {
     if (!user) return;
@@ -115,14 +124,19 @@ function TrackBooking() {
         )}
       </div>
 
-      {/* Full-width live map when the expert is en route */}
-      {["ON_THE_WAY", "ARRIVED", "IN_PROGRESS"].includes(booking.status) && (expertLoc || (booking.lat && booking.lng)) && (
-        <div className="mt-6">
+      {/* Live map — show from ASSIGNED onwards so customer sees expert moving towards them */}
+      {["ASSIGNED", "ACCEPTED", "ON_THE_WAY", "ARRIVED", "IN_PROGRESS"].includes(booking.status) && (expertLoc || (booking.lat && booking.lng)) && (
+        <div className="mt-6 space-y-1">
           <LiveMap
             height={320}
             expert={expertLoc}
             dest={booking.lat && booking.lng ? { lat: Number(booking.lat), lng: Number(booking.lng) } : null}
           />
+          {!expertLoc && (
+            <p className="text-center text-xs text-muted-foreground">
+              Waiting for live location from your expert…
+            </p>
+          )}
         </div>
       )}
 
