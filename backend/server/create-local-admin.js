@@ -9,7 +9,7 @@ for (const p of envPaths) dotenv.config({ path: p });
 
 const prisma = new PrismaClient();
 const adminEmail = process.env.ADMIN_EMAIL || 'admin@homehero.test';
-const adminPassword = process.env.ADMIN_PASSWORD || 'Admin123!';
+const adminPassword = process.env.ADMIN_PASSWORD || 'Password123';
 
 async function run() {
   const existing = await prisma.users.findUnique({ where: { email: adminEmail }, select: { id: true } });
