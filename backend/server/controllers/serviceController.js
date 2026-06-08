@@ -57,7 +57,7 @@ export const serviceController = {
     await ServiceModel.update(req.params.id, {
       name: b.name, tagline: b.tagline, description: b.description, iconName: b.icon_name,
       imageUrl: b.image_url, ratePerHour: b.rate_per_hour, minHours: b.min_hours,
-      sortOrder: b.sort_order, isActive: b.is_active === undefined ? undefined : Number(b.is_active),
+      sortOrder: b.sort_order, isActive: b.is_active === undefined ? undefined : Boolean(b.is_active),
     });
     await bustCache(SERVICES_CACHE_PREFIX);
     res.json({ status: 'updated' });
