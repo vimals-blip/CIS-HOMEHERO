@@ -67,7 +67,7 @@ An on-demand household services marketplace. Customers book trained, background-
 |---|---|
 | Frontend | React 19, TanStack Start (SSR), TanStack Router, TanStack Query, Tailwind CSS, shadcn/ui |
 | Backend | Node.js 20+ ESM, Express.js |
-| Database | MySQL 8 via mysql2 (connection pool) |
+| Database | MySQL 8 via Prisma ORM (v5) + mysql2 driver |
 | Realtime | Socket.IO (+ Redis adapter for multi-instance) |
 | Queue | BullMQ + Redis (falls back to in-process `setTimeout`) |
 | Auth | JWT access token (15 min) + opaque refresh token (30 days, stored in DB) |
@@ -86,15 +86,14 @@ homehero-spark/
 ├── backend/
 │   ├── server/                   ← The monolith (port 4001)
 │   │   ├── api.js                ← Express app entry: middleware + route mounting
-│   │   ├── db.js                 ← mysql2 connection pool (shared singleton)
-│   │   ├── schema.sql            ← Full DB schema (idempotent CREATE TABLE IF NOT EXISTS)
+│   │   ├── prisma.js             ← Prisma client singleton (shared across the app)
+│   │   ├── migrate.js            ← Redirect stub — use `npm run db:migrate` instead
 │   │   ├── seed.js               ← Demo data seed (run once after migrate)
-│   │   ├── migrate.js            ← Runs schema.sql against the DB
 │   │   ├── auth/
 │   │   │   └── tokens.js         ← JWT sign/verify + refresh token helpers
 │   │   ├── controllers/          ← Request handlers (one file per domain)
 │   │   ├── middleware/           ← auth, cors, rateLimit, cache, sanitize, errorHandler
-│   │   ├── models/               ← DB query functions (no ORM — raw SQL via pool)
+│   │   ├── models/               ← DB query functions (Prisma ORM + $queryRaw for joins)
 │   │   ├── providers/            ← External service adapters (payment, sms, storage, fcm)
 │   │   ├── queues/               ← dispatchQueue.js (BullMQ or in-process setTimeout)
 │   │   ├── realtime/             ← io.js — Socket.IO server + room management
@@ -105,6 +104,8 @@ homehero-spark/
 │   │   ├── auth-service/         ← Standalone auth (port 4101)
 │   │   ├── payment-service/      ← Standalone payment (port 4102)
 │   │   └── booking-service/      ← Standalone booking (port 4103)
+│   ├── prisma/
+│   │   └── schema.prisma         ← Prisma schema — all tables, enums, and column types
 │   └── scripts/
 │       └── load-test.js          ← k6 load test (requires k6 installed)
 │
@@ -151,11 +152,11 @@ cd ../frontend && npm install
 
 # 2. Configure environment
 cp backend/.env.example backend/.env
-# Edit backend/.env — at minimum: DB_HOST, DB_USER, DB_PASSWORD, DB_NAME
+# Edit backend/.env — set DATABASE_URL=mysql://user:pass@127.0.0.1:3306/homehero
 
 # 3. Create the DB and apply schema
 mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS homehero"
-node backend/server/migrate.js
+cd backend && npm run db:migrate && cd ..
 
 # 4. Seed demo data (services, cities, demo accounts)
 node backend/server/seed.js
@@ -196,11 +197,7 @@ All variables live in `backend/.env`. The app runs without most of them — prov
 
 | Variable | Default | Notes |
 |---|---|---|
-| `DB_HOST` | `127.0.0.1` | MySQL host |
-| `DB_USER` | `root` | MySQL user |
-| `DB_PASSWORD` | _(empty)_ | MySQL password |
-| `DB_NAME` | `homehero` | MySQL database name |
-| `DB_CONNECTION_LIMIT` | `25` | Pool size per process. Keep MySQL `max_connections` > processes × this + headroom |
+| `DATABASE_URL` | _(required)_ | Full Prisma connection string: `mysql://user:pass@127.0.0.1:3306/homehero` |
 | `JWT_SECRET` | `dev-secret` | **Must be 32+ random chars in production.** Generate: `openssl rand -hex 32` |
 | `API_PORT` | `4001` | Monolith port |
 | `GATEWAY_PORT` | `4000` | Gateway port (only needed if running the gateway) |
@@ -301,27 +298,57 @@ When access token expires (server returns 401):
 
 ### 6.5 Database Layer — Models
 
-There is no ORM. Every model file in `backend/server/models/` exports an object of async functions that run parameterised SQL through the shared `pool` singleton from `db.js`.
+Every model file in `backend/server/models/` exports an object of async functions backed by **Prisma ORM v5**. The shared Prisma client is the singleton exported from `prisma.js`. Simple CRUD uses Prisma's typed API; complex multi-table JOINs use `prisma.$queryRaw` with `Prisma.sql` tagged template literals (SQL-injection-safe parameterised queries).
 
 ```js
 // Standard pattern
-import pool from '../db.js';
+import prisma from '../prisma.js';
+import { Prisma } from '@prisma/client';
 
 export const ExampleModel = {
   async findById(id) {
-    const [rows] = await pool.query('SELECT * FROM example WHERE id = ?', [id]);
-    return rows[0] ?? null;
+    return prisma.example.findUnique({ where: { id } });
   },
 
-  // The optional `conn` parameter lets callers inject a transaction connection
-  async create(data, conn = pool) {
-    const [r] = await conn.query('INSERT INTO example SET ?', [data]);
-    return r.insertId;
+  // The optional `tx` parameter lets callers inject a transaction client
+  async create(data, tx = prisma) {
+    return tx.example.create({ data });
+  },
+
+  // Multi-table JOIN — use $queryRaw with Prisma.sql for safe parameterisation
+  async findWithDetails(id) {
+    const rows = await prisma.$queryRaw`
+      SELECT e.*, o.name AS owner_name
+      FROM example e LEFT JOIN owners o ON o.id = e.owner_id
+      WHERE e.id = ${id}
+    `;
+    return rows[0] ?? null;
   },
 };
 ```
 
-**Transactions** — use `pool.getConnection()` → `beginTransaction()` → `commit()` / `rollback()` → `release()`. The booking-with-wallet-debit in `bookingController.js` is the canonical example to copy.
+**Dynamic WHERE clauses** — build `Prisma.sql` fragment arrays and join them:
+
+```js
+const filters = [];
+if (q) filters.push(Prisma.sql`name LIKE ${`%${q}%`}`);
+const where = filters.length
+  ? Prisma.sql`WHERE ${Prisma.join(filters, ' AND ')}`
+  : Prisma.empty;
+const rows = await prisma.$queryRaw`SELECT * FROM example ${where}`;
+```
+
+**Transactions** — use `prisma.$transaction(async (tx) => { ... })` and pass `tx` into every model method inside the callback. The booking-with-wallet-debit in `bookingController.js` is the canonical example to copy.
+
+```js
+const bookingId = await prisma.$transaction(async (tx) => {
+  const id = await BookingModel.create(payload, tx);
+  await WalletModel.debitWithConn(tx, userId, amount, id, description);
+  return id;
+});
+```
+
+**Schema management** — the Prisma schema lives in `backend/prisma/schema.prisma`. Apply changes with `npm run db:migrate` (runs `prisma db push`) from the `backend/` directory.
 
 ### 6.6 Routes → Controllers
 

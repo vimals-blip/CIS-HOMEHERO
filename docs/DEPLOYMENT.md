@@ -44,13 +44,13 @@ publishing the gateway on :4000.
 ```bash
 export JWT_SECRET=$(openssl rand -hex 32)
 export ALLOWED_ORIGINS=https://app.homehero.com
-export DB_PASSWORD=a-strong-db-password
+export DATABASE_URL=mysql://homehero:a-strong-db-password@db:3306/homehero
 docker compose up --build -d
 ```
 
 (`JWT_SECRET` is required — compose errors without it. `NODE_ENV` defaults to
 `production`.) Then run the frontend SSR server and reverse proxy on the host
-as below, and run migrations once: `docker compose exec monolith node server/migrate.js`.
+as below, and run migrations once: `docker compose exec monolith npm run db:migrate`.
 
 ## Option B — Direct (PM2)
 
@@ -62,7 +62,7 @@ Node 20+, MySQL 8, and (recommended) Redis on the host. Install PM2:
 ```bash
 cp backend/.env.example backend/.env
 # Edit backend/.env:
-#   DB_* …………… production MySQL
+#   DATABASE_URL=mysql://user:pass@127.0.0.1:3306/homehero   (production MySQL)
 #   JWT_SECRET …… openssl rand -hex 32   (the boot guard rejects weak secrets)
 #   ALLOWED_ORIGINS=https://app.homehero.com
 #   REDIS_URL=redis://localhost:6379

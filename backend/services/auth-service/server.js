@@ -6,7 +6,7 @@ import dotenv from 'dotenv';
 import express from 'express';
 import helmet from 'helmet';
 import compression from 'compression';
-import pool from '../../server/db.js';
+import prisma from '../../server/prisma.js';
 import { corsMiddleware } from '../../server/middleware/cors.js';
 import { sanitizeBody } from '../../server/middleware/sanitize.js';
 import { errorHandler } from '../../server/middleware/errorHandler.js';
@@ -29,7 +29,7 @@ app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '1mb' }));
 app.use(sanitizeBody);
 
 app.get(`${BASE}/health`, async (_req, res) => {
-  try { await pool.query('SELECT 1'); res.json({ status: 'ok', service: 'auth-service', db: 'connected' }); }
+  try { await prisma.$queryRaw`SELECT 1`; res.json({ status: 'ok', service: 'auth-service', db: 'connected' }); }
   catch { res.status(503).json({ status: 'degraded', service: 'auth-service' }); }
 });
 

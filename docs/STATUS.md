@@ -1,8 +1,16 @@
 # HomeHero — Project Status
 
-_Last updated: 2026-06-05_
+_Last updated: 2026-06-08_
 
-## ✅ Shipped today (16 commits)
+## ✅ Shipped (latest)
+
+6. **Prisma ORM migration** — replaced all `mysql2` raw-SQL pool calls with
+   Prisma ORM v5 across all 19 model files, 2 controllers, 3 microservices, and
+   utility scripts. Complex JOINs use `prisma.$queryRaw` + `Prisma.sql` tagged
+   template literals (SQL-injection-safe). Transactions use `prisma.$transaction`.
+   Schema managed via `prisma/schema.prisma`; apply with `npm run db:migrate`.
+
+## ✅ Previously shipped (16 commits)
 
 1. **Repo restructure + full stack** — split into `backend/` + `frontend/`
    packages (separate deps, env, Dockerfile); the whole microservice stack runs
@@ -45,8 +53,8 @@ _Last updated: 2026-06-05_
 - **Thu–Fri** — Extract the last service (**notification-service**); UAT pass
   across all three roles; go/no-go review against the launch checklist in
   [DEPLOYMENT.md](DEPLOYMENT.md).
-- **Stretch** — 1-model **Drizzle** POC (only if we later move the backend to
-  TypeScript; not required for launch — `mysql2` raw SQL stays the fast default).
+- **Stretch** — TypeScript migration POC (Drizzle or Prisma types already
+  available; not required for launch — Prisma ORM is the current DB layer).
 
 ## Health snapshot
 
