@@ -1,45 +1,51 @@
 import crypto from 'node:crypto';
-import pool from '../db.js';
-
-const SELECT = `
-  SELECT w.*, pr.name AS expert_name
-  FROM withdrawal_requests w
-  LEFT JOIN profiles pr ON pr.id = w.expert_id
-`;
+import { Prisma } from '@prisma/client';
+import prisma from '../prisma.js';
 
 export const WithdrawalModel = {
   async create({ expertId, amount, bankAccount, bankIfsc }) {
     const id = `wd-${crypto.randomUUID()}`;
-    await pool.query(
-      `INSERT INTO withdrawal_requests (id, expert_id, amount, status, bank_account, bank_ifsc, requested_at)
-       VALUES (?, ?, ?, 'REQUESTED', ?, ?, NOW())`,
-      [id, expertId, amount, bankAccount ?? null, bankIfsc ?? null],
-    );
+    await prisma.withdrawal_requests.create({
+      data: { id, expert_id: expertId, amount, status: 'REQUESTED', bank_account: bankAccount ?? null, bank_ifsc: bankIfsc ?? null },
+    });
     return id;
   },
 
   async findById(id) {
-    const [rows] = await pool.query('SELECT * FROM withdrawal_requests WHERE id = ?', [id]);
-    return rows[0] ?? null;
+    return prisma.withdrawal_requests.findUnique({ where: { id } });
   },
 
   async listForExpert(expertId) {
-    const [rows] = await pool.query(
-      'SELECT * FROM withdrawal_requests WHERE expert_id = ? ORDER BY requested_at DESC',
-      [expertId],
-    );
-    return (rows ?? []).map((w) => ({ ...w, amount: Number(w.amount) }));
+    const rows = await prisma.withdrawal_requests.findMany({
+      where: { expert_id: expertId },
+      orderBy: { requested_at: 'desc' },
+    });
+    return rows.map((w) => ({ ...w, amount: Number(w.amount) }));
   },
 
   async listAll(status) {
-    const params = [];
-    let where = '';
-    if (status) { where = 'WHERE w.status = ?'; params.push(status); }
-    const [rows] = await pool.query(`${SELECT} ${where} ORDER BY w.requested_at DESC LIMIT 100`, params);
+    const lim = Prisma.raw('100');
+    let rows;
+    if (status) {
+      rows = await prisma.$queryRaw`
+        SELECT w.*, pr.name AS expert_name
+        FROM withdrawal_requests w
+        LEFT JOIN profiles pr ON pr.id = w.expert_id
+        WHERE w.status = ${status}
+        ORDER BY w.requested_at DESC LIMIT ${lim}
+      `;
+    } else {
+      rows = await prisma.$queryRaw`
+        SELECT w.*, pr.name AS expert_name
+        FROM withdrawal_requests w
+        LEFT JOIN profiles pr ON pr.id = w.expert_id
+        ORDER BY w.requested_at DESC LIMIT ${lim}
+      `;
+    }
     return (rows ?? []).map((w) => ({ ...w, amount: Number(w.amount) }));
   },
 
   async setStatus(id, status) {
-    await pool.query('UPDATE withdrawal_requests SET status = ?, processed_at = NOW() WHERE id = ?', [status, id]);
+    await prisma.withdrawal_requests.update({ where: { id }, data: { status, processed_at: new Date() } });
   },
 };

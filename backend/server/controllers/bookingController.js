@@ -1,4 +1,4 @@
-import pool from '../db.js';
+import prisma from '../prisma.js';
 import { BookingModel } from '../models/BookingModel.js';
 import { ServiceModel } from '../models/ServiceModel.js';
 import { ExpertModel } from '../models/ExpertModel.js';
@@ -171,18 +171,11 @@ export const bookingController = {
     // Create booking (and debit wallet, if used) atomically.
     let bookingId;
     if (payWithWallet) {
-      const conn = await pool.getConnection();
-      try {
-        await conn.beginTransaction();
-        bookingId = await BookingModel.create(bookingPayload, conn);
-        await WalletModel.debitWithConn(conn, req.user.id, total, bookingId, `Payment for ${service.name}`);
-        await conn.commit();
-      } catch (err) {
-        await conn.rollback();
-        throw err;
-      } finally {
-        conn.release();
-      }
+      bookingId = await prisma.$transaction(async (tx) => {
+        const id = await BookingModel.create(bookingPayload, tx);
+        await WalletModel.debitWithConn(tx, req.user.id, total, id, `Payment for ${service.name}`);
+        return id;
+      });
       await PaymentModel.create({ bookingId, amount: total, method: 'WALLET', status: 'PAID' });
     } else {
       bookingId = await BookingModel.create(bookingPayload);

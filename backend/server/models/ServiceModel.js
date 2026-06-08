@@ -1,32 +1,39 @@
 import crypto from 'node:crypto';
-import pool from '../db.js';
+import prisma from '../prisma.js';
 
 export const ServiceModel = {
   async findAll({ activeOnly = true } = {}) {
-    const where = activeOnly ? 'WHERE is_active = 1' : '';
-    const [rows] = await pool.query(
-      `SELECT * FROM services ${where} ORDER BY sort_order ASC, name ASC`,
-    );
-    return rows ?? [];
+    return prisma.services.findMany({
+      where: activeOnly ? { is_active: true } : undefined,
+      orderBy: [{ sort_order: 'asc' }, { name: 'asc' }],
+    });
   },
 
   async findById(id) {
-    const [rows] = await pool.query('SELECT * FROM services WHERE id = ?', [id]);
-    return rows[0] ?? null;
+    return prisma.services.findUnique({ where: { id } });
   },
 
   async findBySlug(slug) {
-    const [rows] = await pool.query('SELECT * FROM services WHERE slug = ?', [slug]);
-    return rows[0] ?? null;
+    return prisma.services.findUnique({ where: { slug } });
   },
 
   async create({ name, slug, tagline, description, iconName, imageUrl, ratePerHour, minHours, sortOrder }) {
     const id = `svc-${crypto.randomUUID()}`;
-    await pool.query(
-      `INSERT INTO services (id, name, slug, tagline, description, icon_name, image_url, rate_per_hour, min_hours, sort_order, is_active, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())`,
-      [id, name, slug, tagline ?? null, description ?? null, iconName ?? null, imageUrl ?? null, ratePerHour ?? 0, minHours ?? 1, sortOrder ?? 0],
-    );
+    await prisma.services.create({
+      data: {
+        id,
+        name,
+        slug,
+        tagline: tagline ?? null,
+        description: description ?? null,
+        icon_name: iconName ?? null,
+        image_url: imageUrl ?? null,
+        rate_per_hour: ratePerHour ?? 0,
+        min_hours: minHours ?? 1,
+        sort_order: sortOrder ?? 0,
+        is_active: true,
+      },
+    });
     return id;
   },
 
@@ -36,11 +43,11 @@ export const ServiceModel = {
       imageUrl: 'image_url', ratePerHour: 'rate_per_hour', minHours: 'min_hours',
       sortOrder: 'sort_order', isActive: 'is_active',
     };
-    const cols = [], vals = [];
+    const data = {};
     for (const [key, col] of Object.entries(map)) {
-      if (fields[key] !== undefined) { cols.push(`${col} = ?`); vals.push(fields[key]); }
+      if (fields[key] !== undefined) data[col] = fields[key];
     }
-    if (!cols.length) return;
-    await pool.query(`UPDATE services SET ${cols.join(', ')} WHERE id = ?`, [...vals, id]);
+    if (!Object.keys(data).length) return;
+    await prisma.services.update({ where: { id }, data });
   },
 };

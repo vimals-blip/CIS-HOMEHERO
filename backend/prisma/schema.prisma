@@ -1,0 +1,497 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum UserRole {
+  CUSTOMER
+  EXPERT
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum ExpertGender {
+  FEMALE
+  MALE
+  OTHER
+}
+
+enum ExpertStatus {
+  ONLINE
+  OFFLINE
+  BUSY
+}
+
+enum OnboardingStatus {
+  INCOMPLETE
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum BookingType {
+  INSTANT
+  SCHEDULED
+}
+
+enum BookingStatus {
+  SEARCHING
+  ASSIGNED
+  ACCEPTED
+  ON_THE_WAY
+  ARRIVED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  WALLET
+  UPI
+  CARD
+}
+
+enum BookingPaymentStatus {
+  PENDING
+  PAID
+  REFUNDED
+}
+
+enum DocumentType {
+  AADHAAR
+  PAN
+  SELFIE
+  OTHER
+}
+
+enum DocumentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum TransactionType {
+  CREDIT
+  DEBIT
+}
+
+enum CouponType {
+  FLAT
+  PERCENT
+}
+
+enum WithdrawalStatus {
+  REQUESTED
+  APPROVED
+  PAID
+  REJECTED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum PaymentTxnStatus {
+  CREATED
+  PAID
+  FAILED
+}
+
+enum PaymentTxnPurpose {
+  WALLET_TOPUP
+  BOOKING
+}
+
+enum PaymentTxnProvider {
+  MOCK
+  RAZORPAY
+}
+
+enum PaymentRecordStatus {
+  CREATED
+  PAID
+  REFUNDED
+}
+
+model users {
+  id            String   @id @db.VarChar(50)
+  email         String   @unique @db.VarChar(255)
+  password_hash String   @db.VarChar(255)
+  is_verified   Boolean  @default(false)
+  is_blocked    Boolean  @default(false)
+  created_at    DateTime @default(now()) @db.DateTime(0)
+}
+
+model profiles {
+  id         String   @id @db.VarChar(50)
+  name       String?  @db.VarChar(255)
+  phone      String?  @db.VarChar(20)
+  city       String?  @db.VarChar(255)
+  avatar_url String?  @db.Text
+  created_at DateTime @default(now()) @db.DateTime(0)
+  updated_at DateTime @updatedAt @db.DateTime(0)
+}
+
+model profile_contacts {
+  user_id    String   @id @db.VarChar(50)
+  phone      String?  @db.VarChar(50)
+  created_at DateTime @default(now()) @db.DateTime(0)
+  updated_at DateTime @updatedAt @db.DateTime(0)
+}
+
+model user_roles {
+  id         String   @id @db.VarChar(50)
+  user_id    String   @db.VarChar(50)
+  role       UserRole @default(CUSTOMER)
+  created_at DateTime @default(now()) @db.DateTime(0)
+}
+
+model otp_verifications {
+  id         String   @id @db.VarChar(50)
+  phone      String   @db.VarChar(20)
+  otp_hash   String   @db.VarChar(255)
+  purpose    String   @default("LOGIN") @db.VarChar(20)
+  attempts   Int      @default(0)
+  consumed   Boolean  @default(false)
+  expires_at DateTime @db.DateTime(0)
+  created_at DateTime @default(now()) @db.DateTime(0)
+
+  @@index([phone, created_at])
+}
+
+model refresh_tokens {
+  id         String   @id @db.VarChar(50)
+  user_id    String   @db.VarChar(50)
+  token_hash String   @unique @db.VarChar(255)
+  revoked    Boolean  @default(false)
+  expires_at DateTime @db.DateTime(0)
+  created_at DateTime @default(now()) @db.DateTime(0)
+
+  @@index([user_id])
+}
+
+model services {
+  id            String   @id @db.VarChar(50)
+  name          String   @db.VarChar(255)
+  slug          String   @unique @db.VarChar(255)
+  tagline       String?  @db.VarChar(255)
+  description   String?  @db.Text
+  icon_name     String?  @db.VarChar(100)
+  image_url     String?  @db.Text
+  rate_per_hour Decimal  @default(0) @db.Decimal(12, 2)
+  min_hours     Decimal  @default(1) @db.Decimal(3, 1)
+  sort_order    Int      @default(0)
+  is_active     Boolean  @default(true)
+  created_at    DateTime @default(now()) @db.DateTime(0)
+}
+
+model experts {
+  id                String          @id @db.VarChar(50)
+  gender            ExpertGender    @default(FEMALE)
+  bio               String?         @db.Text
+  experience_years  Int             @default(0)
+  avg_rating        Decimal         @default(0) @db.Decimal(3, 2)
+  review_count      Int             @default(0)
+  total_jobs        Int             @default(0)
+  is_verified       Boolean         @default(false)
+  is_trained        Boolean         @default(false)
+  status            ExpertStatus    @default(OFFLINE)
+  current_lat       Decimal?        @db.Decimal(10, 7)
+  current_lng       Decimal?        @db.Decimal(10, 7)
+  service_pincodes  Json?
+  onboarding_status OnboardingStatus @default(SUBMITTED)
+  created_at        DateTime        @default(now()) @db.DateTime(0)
+
+  @@index([status, is_verified])
+}
+
+model expert_services {
+  expert_id  String @db.VarChar(50)
+  service_id String @db.VarChar(50)
+
+  @@id([expert_id, service_id])
+}
+
+model expert_wallet {
+  expert_id         String  @id @db.VarChar(50)
+  available_balance Decimal @default(0) @db.Decimal(12, 2)
+  pending_balance   Decimal @default(0) @db.Decimal(12, 2)
+  total_earned      Decimal @default(0) @db.Decimal(12, 2)
+}
+
+model expert_documents {
+  id          String         @id @db.VarChar(50)
+  expert_id   String         @db.VarChar(50)
+  type        DocumentType
+  file_url    String         @db.Text
+  status      DocumentStatus @default(PENDING)
+  review_note String?        @db.VarChar(255)
+  created_at  DateTime       @default(now()) @db.DateTime(0)
+  updated_at  DateTime       @updatedAt @db.DateTime(0)
+
+  @@index([expert_id])
+}
+
+model addresses {
+  id           String   @id @db.VarChar(50)
+  customer_id  String   @db.VarChar(50)
+  label        String   @default("Home") @db.VarChar(100)
+  flat         String?  @db.VarChar(255)
+  address_line String   @db.Text
+  landmark     String?  @db.VarChar(255)
+  city         String   @db.VarChar(100)
+  pincode      String   @db.VarChar(10)
+  lat          Decimal? @db.Decimal(10, 7)
+  lng          Decimal? @db.Decimal(10, 7)
+  is_default   Boolean  @default(false)
+  created_at   DateTime @default(now()) @db.DateTime(0)
+
+  @@index([customer_id])
+}
+
+model coupons {
+  id         String     @id @db.VarChar(50)
+  code       String     @unique @db.VarChar(255)
+  type       CouponType
+  value      Decimal    @default(0) @db.Decimal(12, 2)
+  used_count Int        @default(0)
+  max_uses   Int?
+  is_active  Boolean    @default(true)
+  expires_at DateTime?  @db.DateTime(0)
+  created_at DateTime   @default(now()) @db.DateTime(0)
+}
+
+model bookings {
+  id               String               @id @db.VarChar(50)
+  customer_id      String               @db.VarChar(50)
+  expert_id        String?              @db.VarChar(50)
+  service_id       String               @db.VarChar(50)
+  booking_type     BookingType          @default(INSTANT)
+  scheduled_at     DateTime?            @db.DateTime(0)
+  duration_hours   Decimal              @default(1) @db.Decimal(3, 1)
+  status           BookingStatus        @default(SEARCHING)
+  eta_minutes      Int?
+  address_snapshot String               @db.Text
+  pincode          String?              @db.VarChar(10)
+  lat              Decimal?             @db.Decimal(10, 7)
+  lng              Decimal?             @db.Decimal(10, 7)
+  base_amount      Decimal              @default(0) @db.Decimal(12, 2)
+  platform_fee     Decimal              @default(0) @db.Decimal(12, 2)
+  expert_amount    Decimal              @default(0) @db.Decimal(12, 2)
+  total_amount     Decimal              @default(0) @db.Decimal(12, 2)
+  discount_amount  Decimal              @default(0) @db.Decimal(12, 2)
+  payment_method   PaymentMethod        @default(CASH)
+  payment_status   BookingPaymentStatus @default(PENDING)
+  coupon_code      String?              @db.VarChar(255)
+  notes            String?              @db.Text
+  cancel_reason    String?              @db.Text
+  started_at       DateTime?            @db.DateTime(0)
+  completed_at     DateTime?            @db.DateTime(0)
+  created_at       DateTime             @default(now()) @db.DateTime(0)
+  updated_at       DateTime             @updatedAt @db.DateTime(0)
+
+  @@index([customer_id, status])
+  @@index([expert_id, status])
+}
+
+model booking_events {
+  id         String        @id @db.VarChar(50)
+  booking_id String        @db.VarChar(50)
+  status     BookingStatus
+  message    String?       @db.VarChar(255)
+  created_at DateTime      @default(now()) @db.DateTime(0)
+
+  @@index([booking_id, created_at])
+}
+
+model reviews {
+  id          String   @id @db.VarChar(50)
+  booking_id  String   @unique @db.VarChar(50)
+  expert_id   String   @db.VarChar(50)
+  customer_id String   @db.VarChar(50)
+  rating      Int
+  comment     String?  @db.Text
+  created_at  DateTime @default(now()) @db.DateTime(0)
+}
+
+model payments {
+  id         String              @id @db.VarChar(50)
+  booking_id String              @db.VarChar(50)
+  amount     Decimal             @db.Decimal(12, 2)
+  method     PaymentMethod       @default(CASH)
+  status     PaymentRecordStatus @default(CREATED)
+  paid_at    DateTime?           @db.DateTime(0)
+  created_at DateTime            @default(now()) @db.DateTime(0)
+}
+
+model transactions {
+  id          String          @id @db.VarChar(50)
+  user_id     String          @db.VarChar(50)
+  booking_id  String?         @db.VarChar(50)
+  type        TransactionType
+  amount      Decimal         @db.Decimal(12, 2)
+  description String?         @db.Text
+  created_at  DateTime        @default(now()) @db.DateTime(0)
+
+  @@index([user_id, created_at])
+}
+
+model customer_wallet {
+  user_id     String   @id @db.VarChar(50)
+  balance     Decimal  @default(0) @db.Decimal(12, 2)
+  total_added Decimal  @default(0) @db.Decimal(12, 2)
+  total_spent Decimal  @default(0) @db.Decimal(12, 2)
+  updated_at  DateTime @updatedAt @db.DateTime(0)
+}
+
+model coupon_usage {
+  id         String   @id @db.VarChar(50)
+  coupon_id  String   @db.VarChar(50)
+  user_id    String   @db.VarChar(50)
+  booking_id String?  @db.VarChar(50)
+  discount   Decimal  @default(0) @db.Decimal(12, 2)
+  created_at DateTime @default(now()) @db.DateTime(0)
+
+  @@index([user_id, coupon_id])
+}
+
+model payment_transactions {
+  id         String             @id @db.VarChar(50)
+  user_id    String             @db.VarChar(50)
+  booking_id String?            @db.VarChar(50)
+  order_id   String             @db.VarChar(120)
+  payment_id String?            @db.VarChar(120)
+  amount     Decimal            @db.Decimal(12, 2)
+  currency   String             @default("INR") @db.VarChar(10)
+  purpose    PaymentTxnPurpose  @default(WALLET_TOPUP)
+  provider   PaymentTxnProvider @default(MOCK)
+  status     PaymentTxnStatus   @default(CREATED)
+  signature  String?            @db.VarChar(255)
+  created_at DateTime           @default(now()) @db.DateTime(0)
+  updated_at DateTime           @updatedAt @db.DateTime(0)
+
+  @@index([order_id])
+  @@index([user_id, created_at])
+}
+
+model withdrawal_requests {
+  id           String           @id @db.VarChar(50)
+  expert_id    String           @db.VarChar(50)
+  amount       Decimal          @db.Decimal(12, 2)
+  status       WithdrawalStatus @default(REQUESTED)
+  bank_account String?          @db.VarChar(255)
+  bank_ifsc    String?          @db.VarChar(255)
+  note         String?          @db.VarChar(255)
+  requested_at DateTime         @default(now()) @db.DateTime(0)
+  processed_at DateTime?        @db.DateTime(0)
+
+  @@index([expert_id, status])
+}
+
+model support_tickets {
+  id         String         @id @db.VarChar(50)
+  user_id    String         @db.VarChar(50)
+  booking_id String?        @db.VarChar(50)
+  subject    String         @db.VarChar(255)
+  category   String         @default("GENERAL") @db.VarChar(50)
+  priority   TicketPriority @default(MEDIUM)
+  status     TicketStatus   @default(OPEN)
+  created_at DateTime       @default(now()) @db.DateTime(0)
+  updated_at DateTime       @updatedAt @db.DateTime(0)
+
+  @@index([user_id, status])
+}
+
+model ticket_messages {
+  id         String   @id @db.VarChar(50)
+  ticket_id  String   @db.VarChar(50)
+  sender_id  String   @db.VarChar(50)
+  is_staff   Boolean  @default(false)
+  body       String   @db.Text
+  created_at DateTime @default(now()) @db.DateTime(0)
+
+  @@index([ticket_id, created_at])
+}
+
+model banners {
+  id         String   @id @db.VarChar(50)
+  title      String   @db.VarChar(255)
+  image_url  String   @db.Text
+  link_url   String?  @db.Text
+  sort_order Int      @default(0)
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now()) @db.DateTime(0)
+}
+
+model cms_pages {
+  slug       String   @id @db.VarChar(100)
+  title      String   @db.VarChar(255)
+  body       String?  @db.MediumText
+  updated_at DateTime @updatedAt @db.DateTime(0)
+}
+
+model settings {
+  setting_key   String   @id @db.VarChar(100)
+  setting_value String?  @db.Text
+  is_public     Boolean  @default(false)
+  updated_at    DateTime @updatedAt @db.DateTime(0)
+}
+
+model cities {
+  id         String   @id @db.VarChar(50)
+  name       String   @db.VarChar(100)
+  state      String?  @db.VarChar(100)
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now()) @db.DateTime(0)
+}
+
+model notifications {
+  id         String   @id @db.VarChar(50)
+  user_id    String   @db.VarChar(50)
+  type       String   @db.VarChar(50)
+  title      String   @db.VarChar(255)
+  body       String?  @db.VarChar(500)
+  booking_id String?  @db.VarChar(50)
+  is_read    Boolean  @default(false)
+  created_at DateTime @default(now()) @db.DateTime(0)
+
+  @@index([user_id, is_read, created_at])
+}
+
+model device_tokens {
+  token      String   @id @db.VarChar(255)
+  user_id    String   @db.VarChar(50)
+  platform   String   @default("web") @db.VarChar(20)
+  created_at DateTime @default(now()) @db.DateTime(0)
+
+  @@index([user_id])
+}
+
+model audit_logs {
+  id          String   @id @db.VarChar(50)
+  actor_id    String?  @db.VarChar(50)
+  actor_email String?  @db.VarChar(255)
+  actor_role  String?  @db.VarChar(20)
+  action      String   @db.VarChar(80)
+  entity_type String?  @db.VarChar(50)
+  entity_id   String?  @db.VarChar(50)
+  detail      String?  @db.VarChar(500)
+  created_at  DateTime @default(now()) @db.DateTime(0)
+
+  @@index([created_at])
+  @@index([actor_id])
+}

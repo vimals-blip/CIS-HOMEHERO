@@ -1,6 +1,7 @@
-import pool from '../db.js';
+import { Prisma } from '@prisma/client';
+import prisma from '../prisma.js';
 
-const PUBLIC_SELECT = `
+const PUBLIC_SELECT = Prisma.sql`
   SELECT e.*, pr.name, pr.avatar_url, pr.city
   FROM experts e
   LEFT JOIN profiles pr ON pr.id = e.id
@@ -8,140 +9,135 @@ const PUBLIC_SELECT = `
 `;
 
 export const ExpertModel = {
-  // Public list of verified experts, optionally filtered by service.
   async findList({ serviceId, limit, offset }) {
+    const lim = Prisma.raw(String(parseInt(limit) || 20));
+    const off = Prisma.raw(String(parseInt(offset) || 0));
     if (serviceId) {
-      const [rows] = await pool.query(
-        `${PUBLIC_SELECT}
-         JOIN expert_services es ON es.expert_id = e.id
-         WHERE e.is_verified = 1 AND u.is_blocked = 0 AND es.service_id = ?
-         ORDER BY e.avg_rating DESC, e.total_jobs DESC
-         LIMIT ? OFFSET ?`,
-        [serviceId, limit, offset],
-      );
-      return rows ?? [];
+      return prisma.$queryRaw`
+        ${PUBLIC_SELECT}
+        JOIN expert_services es ON es.expert_id = e.id
+        WHERE e.is_verified = 1 AND u.is_blocked = 0 AND es.service_id = ${serviceId}
+        ORDER BY e.avg_rating DESC, e.total_jobs DESC
+        LIMIT ${lim} OFFSET ${off}
+      `;
     }
-    const [rows] = await pool.query(
-      `${PUBLIC_SELECT}
-       WHERE e.is_verified = 1 AND u.is_blocked = 0
-       ORDER BY e.avg_rating DESC, e.total_jobs DESC
-       LIMIT ? OFFSET ?`,
-      [limit, offset],
-    );
-    return rows ?? [];
+    return prisma.$queryRaw`
+      ${PUBLIC_SELECT}
+      WHERE e.is_verified = 1 AND u.is_blocked = 0
+      ORDER BY e.avg_rating DESC, e.total_jobs DESC
+      LIMIT ${lim} OFFSET ${off}
+    `;
   },
 
   async findById(id) {
-    const [rows] = await pool.query(`${PUBLIC_SELECT} WHERE e.id = ?`, [id]);
+    const rows = await prisma.$queryRaw`${PUBLIC_SELECT} WHERE e.id = ${id}`;
     return rows[0] ?? null;
   },
 
   async getServiceIds(expertId) {
-    const [rows] = await pool.query('SELECT service_id FROM expert_services WHERE expert_id = ?', [expertId]);
+    const rows = await prisma.expert_services.findMany({
+      where: { expert_id: expertId },
+      select: { service_id: true },
+    });
     return rows.map((r) => r.service_id);
   },
 
-  // Find the best available expert to handle an instant booking for a service.
-  // Prefers ONLINE & verified experts who offer the service; falls back to any
-  // verified expert offering it so demo bookings can always be assigned.
   async findAvailableForService(serviceId) {
-    const [online] = await pool.query(
-      `SELECT e.* FROM experts e
-       JOIN expert_services es ON es.expert_id = e.id
-       JOIN users u ON u.id = e.id
-       WHERE es.service_id = ? AND e.is_verified = 1 AND e.status = 'ONLINE' AND u.is_blocked = 0
-       ORDER BY e.avg_rating DESC, e.total_jobs DESC
-       LIMIT 1`,
-      [serviceId],
-    );
+    const online = await prisma.$queryRaw`
+      SELECT e.* FROM experts e
+      JOIN expert_services es ON es.expert_id = e.id
+      JOIN users u ON u.id = e.id
+      WHERE es.service_id = ${serviceId} AND e.is_verified = 1 AND e.status = 'ONLINE' AND u.is_blocked = 0
+      ORDER BY e.avg_rating DESC, e.total_jobs DESC
+      LIMIT 1
+    `;
     if (online[0]) return online[0];
 
-    const [any] = await pool.query(
-      `SELECT e.* FROM experts e
-       JOIN expert_services es ON es.expert_id = e.id
-       JOIN users u ON u.id = e.id
-       WHERE es.service_id = ? AND e.is_verified = 1 AND e.status <> 'BUSY' AND u.is_blocked = 0
-       ORDER BY e.avg_rating DESC, e.total_jobs DESC
-       LIMIT 1`,
-      [serviceId],
-    );
+    const any = await prisma.$queryRaw`
+      SELECT e.* FROM experts e
+      JOIN expert_services es ON es.expert_id = e.id
+      JOIN users u ON u.id = e.id
+      WHERE es.service_id = ${serviceId} AND e.is_verified = 1 AND e.status <> 'BUSY' AND u.is_blocked = 0
+      ORDER BY e.avg_rating DESC, e.total_jobs DESC
+      LIMIT 1
+    `;
     return any[0] ?? null;
   },
 
-  // Dispatch candidates: ONLINE, verified, non-blocked experts who offer the
-  // service, with their current location, rating and active-job count for ranking.
   async findCandidatesForService(serviceId) {
-    const [rows] = await pool.query(
-      `SELECT e.id, e.avg_rating, e.current_lat, e.current_lng, e.status,
+    return prisma.$queryRaw`
+      SELECT e.id, e.avg_rating, e.current_lat, e.current_lng, e.status,
         (SELECT COUNT(*) FROM bookings b
           WHERE b.expert_id = e.id
             AND b.status IN ('ASSIGNED','ON_THE_WAY','ARRIVED','IN_PROGRESS')) AS active_jobs
-       FROM experts e
-       JOIN expert_services es ON es.expert_id = e.id
-       JOIN users u ON u.id = e.id
-       WHERE es.service_id = ? AND e.is_verified = 1 AND e.status = 'ONLINE' AND u.is_blocked = 0`,
-      [serviceId],
-    );
-    return rows ?? [];
+      FROM experts e
+      JOIN expert_services es ON es.expert_id = e.id
+      JOIN users u ON u.id = e.id
+      WHERE es.service_id = ${serviceId} AND e.is_verified = 1 AND e.status = 'ONLINE' AND u.is_blocked = 0
+    `;
   },
 
-  // Completed-job earnings ledger: who booked, what service, how much earned.
   async earningsHistory(expertId, limit = 50) {
-    const [rows] = await pool.query(
-      `SELECT b.id, b.total_amount, b.expert_amount, b.completed_at, b.created_at,
+    const lim = Prisma.raw(String(parseInt(limit) || 50));
+    const rows = await prisma.$queryRaw`
+      SELECT b.id, b.total_amount, b.expert_amount, b.completed_at, b.created_at,
         s.name AS service_name, cust.name AS customer_name
-       FROM bookings b
-       LEFT JOIN services s ON s.id = b.service_id
-       LEFT JOIN profiles cust ON cust.id = b.customer_id
-       WHERE b.expert_id = ? AND b.status = 'COMPLETED'
-       ORDER BY b.completed_at DESC, b.created_at DESC LIMIT ?`,
-      [expertId, limit],
-    );
+      FROM bookings b
+      LEFT JOIN services s ON s.id = b.service_id
+      LEFT JOIN profiles cust ON cust.id = b.customer_id
+      WHERE b.expert_id = ${expertId} AND b.status = 'COMPLETED'
+      ORDER BY b.completed_at DESC, b.created_at DESC LIMIT ${lim}
+    `;
     return (rows ?? []).map((r) => ({ ...r, total_amount: Number(r.total_amount), expert_amount: Number(r.expert_amount) }));
   },
 
   async setStatus(id, status) {
-    await pool.query('UPDATE experts SET status = ? WHERE id = ?', [status, id]);
+    await prisma.experts.update({ where: { id }, data: { status } });
   },
 
   async setLocation(id, lat, lng) {
-    await pool.query('UPDATE experts SET current_lat = ?, current_lng = ? WHERE id = ?', [lat, lng, id]);
+    await prisma.experts.update({ where: { id }, data: { current_lat: lat, current_lng: lng } });
   },
 
   async setVerified(id, isVerified) {
-    await pool.query(
-      "UPDATE experts SET is_verified = ?, is_trained = ?, onboarding_status = ? WHERE id = ?",
-      [Number(isVerified), Number(isVerified), isVerified ? 'APPROVED' : 'REJECTED', id],
-    );
+    await prisma.experts.update({
+      where: { id },
+      data: {
+        is_verified: isVerified,
+        is_trained: isVerified,
+        onboarding_status: isVerified ? 'APPROVED' : 'REJECTED',
+      },
+    });
   },
 
   async incrementJobs(id) {
-    await pool.query('UPDATE experts SET total_jobs = total_jobs + 1 WHERE id = ?', [id]);
+    await prisma.experts.update({ where: { id }, data: { total_jobs: { increment: 1 } } });
   },
 
   async recalcStats(expertId) {
-    const [[stats]] = await pool.query(
-      'SELECT AVG(rating) AS avg_rating, COUNT(*) AS review_count FROM reviews WHERE expert_id = ?',
-      [expertId],
-    );
-    await pool.query('UPDATE experts SET avg_rating = ?, review_count = ? WHERE id = ?', [
-      Number(stats.avg_rating ?? 0).toFixed(2),
-      stats.review_count ?? 0,
-      expertId,
-    ]);
+    const stats = await prisma.reviews.aggregate({
+      _avg: { rating: true },
+      _count: { rating: true },
+      where: { expert_id: expertId },
+    });
+    await prisma.experts.update({
+      where: { id: expertId },
+      data: {
+        avg_rating: Number(stats._avg.rating ?? 0).toFixed(2),
+        review_count: stats._count.rating ?? 0,
+      },
+    });
   },
 
   async findAdminList({ isVerified, status, q, limit, offset }) {
-    const filters = [], params = [];
-    if (isVerified === 'true') filters.push('e.is_verified = 1');
-    else if (isVerified === 'false') filters.push('e.is_verified = 0');
-    if (status) { filters.push('e.status = ?'); params.push(status); }
-    if (q) { filters.push('pr.name LIKE ?'); params.push(`%${q}%`); }
-    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
-    const [rows] = await pool.query(
-      `${PUBLIC_SELECT} ${where} ORDER BY e.created_at DESC LIMIT ? OFFSET ?`,
-      [...params, limit, offset],
-    );
-    return rows ?? [];
+    const filters = [];
+    if (isVerified === 'true') filters.push(Prisma.sql`e.is_verified = 1`);
+    else if (isVerified === 'false') filters.push(Prisma.sql`e.is_verified = 0`);
+    if (status) filters.push(Prisma.sql`e.status = ${status}`);
+    if (q) filters.push(Prisma.sql`pr.name LIKE ${`%${q}%`}`);
+    const where = filters.length ? Prisma.sql`WHERE ${Prisma.join(filters, ' AND ')}` : Prisma.empty;
+    const lim = Prisma.raw(String(parseInt(limit) || 20));
+    const off = Prisma.raw(String(parseInt(offset) || 0));
+    return prisma.$queryRaw`${PUBLIC_SELECT} ${where} ORDER BY e.created_at DESC LIMIT ${lim} OFFSET ${off}`;
   },
 };

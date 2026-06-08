@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs';
-import pool from '../db.js';
+import prisma from '../prisma.js';
 import { AuthModel } from '../models/AuthModel.js';
 import { BadRequest, Conflict, HttpError } from '../errors.js';
 import { signAccessToken, generateRefreshToken, hashToken, refreshExpiryDate } from '../auth/tokens.js';
@@ -42,26 +42,18 @@ export const authController = {
     const passwordHash = await bcrypt.hash(password, 10);
 
     // Atomic so an expert is never left with the role but no expert/wallet row.
-    const conn = await pool.getConnection();
-    let userId;
-    try {
-      await conn.beginTransaction();
-      userId = await AuthModel.createUser({ email, passwordHash, name, city, phone, role }, conn);
+    const userId = await prisma.$transaction(async (tx) => {
+      const id = await AuthModel.createUser({ email, passwordHash, name, city, phone, role }, tx);
       if (role === 'EXPERT') {
-        await AuthModel.createExpertProfile(userId, {
+        await AuthModel.createExpertProfile(id, {
           gender, bio, experienceYears: experience_years, servicePincodes: service_pincodes,
-        }, conn);
+        }, tx);
         if (Array.isArray(service_ids) && service_ids.length) {
-          await AuthModel.addExpertServices(userId, service_ids, conn);
+          await AuthModel.addExpertServices(id, service_ids, tx);
         }
       }
-      await conn.commit();
-    } catch (err) {
-      await conn.rollback();
-      throw err;
-    } finally {
-      conn.release();
-    }
+      return id;
+    });
 
     res.status(201).json({ id: userId, email, role });
   },

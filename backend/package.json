@@ -12,7 +12,8 @@
     "payment-service": "node services/payment-service/server.js",
     "booking-service": "node services/booking-service/server.js",
     "dev:all": "bash ../scripts/dev-all.sh",
-    "db:migrate": "node server/migrate.js",
+    "db:migrate": "prisma db push",
+    "db:generate": "prisma generate",
     "db:seed": "node server/seed.js",
     "db:backfill-experts": "node server/backfillExperts.js",
     "check-env": "node server/check-env.js",
@@ -22,6 +23,7 @@
     "create-admin": "node server/create-local-admin.js"
   },
   "dependencies": {
+    "@prisma/client": "^5.22.0",
     "@socket.io/redis-adapter": "^8.3.0",
     "bcryptjs": "^2.4.3",
     "bullmq": "^5.78.0",
@@ -40,5 +42,8 @@
   },
   "optionalDependencies": {
     "firebase-admin": "^12.0.0"
+  },
+  "devDependencies": {
+    "prisma": "^5.22.0"
   }
 }

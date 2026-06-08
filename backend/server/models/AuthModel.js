@@ -1,157 +1,142 @@
 import crypto from 'node:crypto';
-import pool from '../db.js';
+import prisma from '../prisma.js';
 
 export const AuthModel = {
   async findByEmail(email) {
-    const [rows] = await pool.query('SELECT * FROM users WHERE email = ?', [email]);
-    return rows[0] ?? null;
+    return prisma.users.findUnique({ where: { email } });
   },
 
   async emailExists(email) {
-    const [rows] = await pool.query('SELECT id FROM users WHERE email = ?', [email]);
-    return rows.length > 0;
+    const count = await prisma.users.count({ where: { email } });
+    return count > 0;
   },
 
-  async createUser({ email, passwordHash, name, city, phone, role }, conn) {
-    const db = conn ?? pool;
+  async createUser({ email, passwordHash, name, city, phone, role }, tx = prisma) {
     const id = `user-${crypto.randomUUID()}`;
-    await db.query(
-      'INSERT INTO users (id, email, password_hash, is_verified, created_at) VALUES (?, ?, ?, 1, NOW())',
-      [id, email, passwordHash],
-    );
-    await db.query(
-      `INSERT INTO profiles (id, name, phone, city, created_at) VALUES (?, ?, ?, ?, NOW())
-       ON DUPLICATE KEY UPDATE name = VALUES(name), phone = VALUES(phone), city = VALUES(city)`,
-      [id, name ?? null, phone ?? null, city ?? null],
-    );
+    await tx.users.create({
+      data: { id, email, password_hash: passwordHash, is_verified: true },
+    });
+    await tx.profiles.upsert({
+      where: { id },
+      create: { id, name: name ?? null, phone: phone ?? null, city: city ?? null },
+      update: { name: name ?? null, phone: phone ?? null, city: city ?? null },
+    });
     if (phone) {
-      await db.query(
-        'INSERT INTO profile_contacts (user_id, phone, created_at) VALUES (?, ?, NOW()) ON DUPLICATE KEY UPDATE phone = VALUES(phone)',
-        [id, phone],
-      );
+      await tx.profile_contacts.upsert({
+        where: { user_id: id },
+        create: { user_id: id, phone },
+        update: { phone },
+      });
     }
-    await db.query(
-      'INSERT INTO user_roles (id, user_id, role, created_at) VALUES (?, ?, ?, NOW()) ON DUPLICATE KEY UPDATE role = VALUES(role)',
-      [id, id, role],
-    );
+    await tx.user_roles.upsert({
+      where: { id },
+      create: { id, user_id: id, role },
+      update: { role },
+    });
     return id;
   },
 
-  // Create an expert (worker) record. New experts start SUBMITTED and unverified
-  // until an admin approves them.
-  async createExpertProfile(userId, { gender, bio, experienceYears, servicePincodes }, conn) {
-    const db = conn ?? pool;
-    await db.query(
-      `INSERT INTO experts (id, gender, bio, experience_years, is_verified, is_trained, status, service_pincodes, onboarding_status, created_at)
-       VALUES (?, ?, ?, ?, 0, 0, 'OFFLINE', ?, 'SUBMITTED', NOW())
-       ON DUPLICATE KEY UPDATE gender = VALUES(gender), bio = VALUES(bio), experience_years = VALUES(experience_years), service_pincodes = VALUES(service_pincodes)`,
-      [userId, gender ?? 'FEMALE', bio ?? null, experienceYears ?? 0, JSON.stringify(servicePincodes ?? [])],
-    );
-    await db.query(
-      'INSERT INTO expert_wallet (expert_id, available_balance, pending_balance, total_earned) VALUES (?, 0, 0, 0) ON DUPLICATE KEY UPDATE expert_id = expert_id',
-      [userId],
-    );
+  async createExpertProfile(userId, { gender, bio, experienceYears, servicePincodes }, tx = prisma) {
+    await tx.experts.upsert({
+      where: { id: userId },
+      create: {
+        id: userId,
+        gender: gender ?? 'FEMALE',
+        bio: bio ?? null,
+        experience_years: experienceYears ?? 0,
+        service_pincodes: servicePincodes ?? [],
+        onboarding_status: 'SUBMITTED',
+      },
+      update: {
+        gender: gender ?? 'FEMALE',
+        bio: bio ?? null,
+        experience_years: experienceYears ?? 0,
+        service_pincodes: servicePincodes ?? [],
+      },
+    });
+    await tx.expert_wallet.upsert({
+      where: { expert_id: userId },
+      create: { expert_id: userId },
+      update: {},
+    });
   },
 
-  async addExpertServices(expertId, serviceIds, conn) {
-    const db = conn ?? pool;
+  async addExpertServices(expertId, serviceIds, tx = prisma) {
     for (const serviceId of serviceIds) {
-      await db.query(
-        'INSERT INTO expert_services (expert_id, service_id) VALUES (?, ?) ON DUPLICATE KEY UPDATE service_id = VALUES(service_id)',
-        [expertId, serviceId],
-      );
+      await tx.expert_services.upsert({
+        where: { expert_id_service_id: { expert_id: expertId, service_id: serviceId } },
+        create: { expert_id: expertId, service_id: serviceId },
+        update: {},
+      });
     }
   },
 
   async getRoleByUserId(userId) {
-    const [rows] = await pool.query('SELECT role FROM user_roles WHERE user_id = ?', [userId]);
-    return rows[0]?.role ?? 'CUSTOMER';
+    const row = await prisma.user_roles.findFirst({ where: { user_id: userId } });
+    return row?.role ?? 'CUSTOMER';
   },
 
-  // ── Phone-based accounts (OTP login) ──────────────────────────────────────
   async findUserByPhone(phone) {
-    const [rows] = await pool.query(
-      `SELECT u.id, u.email, u.is_blocked, ur.role
-       FROM profiles p
-       JOIN users u ON u.id = p.id
-       LEFT JOIN user_roles ur ON ur.user_id = p.id
-       WHERE p.phone = ?
-       ORDER BY u.created_at ASC
-       LIMIT 1`,
-      [phone],
-    );
+    const rows = await prisma.$queryRaw`
+      SELECT u.id, u.email, u.is_blocked, ur.role
+      FROM profiles p
+      JOIN users u ON u.id = p.id
+      LEFT JOIN user_roles ur ON ur.user_id = p.id
+      WHERE p.phone = ${phone}
+      ORDER BY u.created_at ASC
+      LIMIT 1
+    `;
     return rows[0] ?? null;
   },
 
-  // Create a minimal customer account from a verified phone number.
   async createPhoneUser(phone) {
     const id = `user-${crypto.randomUUID()}`;
     const email = `${phone}@phone.homehero`;
-    // Random unusable password — these accounts log in via OTP only.
     const placeholderHash = crypto.randomBytes(24).toString('hex');
-    await pool.query(
-      'INSERT INTO users (id, email, password_hash, is_verified, created_at) VALUES (?, ?, ?, 1, NOW())',
-      [id, email, placeholderHash],
-    );
-    await pool.query(
-      'INSERT INTO profiles (id, name, phone, created_at) VALUES (?, NULL, ?, NOW())',
-      [id, phone],
-    );
-    await pool.query(
-      'INSERT INTO user_roles (id, user_id, role, created_at) VALUES (?, ?, "CUSTOMER", NOW())',
-      [id, id],
-    );
+    await prisma.users.create({ data: { id, email, password_hash: placeholderHash, is_verified: true } });
+    await prisma.profiles.create({ data: { id, name: null, phone } });
+    await prisma.user_roles.create({ data: { id, user_id: id, role: 'CUSTOMER' } });
     return { id, email, role: 'CUSTOMER' };
   },
 
-  // ── OTP ───────────────────────────────────────────────────────────────────
   async createOtp(phone, otpHash, expiresAt) {
     const id = `otp-${crypto.randomUUID()}`;
-    await pool.query(
-      'INSERT INTO otp_verifications (id, phone, otp_hash, expires_at, created_at) VALUES (?, ?, ?, ?, NOW())',
-      [id, phone, otpHash, expiresAt],
-    );
+    await prisma.otp_verifications.create({ data: { id, phone, otp_hash: otpHash, expires_at: expiresAt } });
     return id;
   },
 
   async latestOtp(phone) {
-    const [rows] = await pool.query(
-      'SELECT * FROM otp_verifications WHERE phone = ? AND consumed = 0 ORDER BY created_at DESC LIMIT 1',
-      [phone],
-    );
-    return rows[0] ?? null;
+    return prisma.otp_verifications.findFirst({
+      where: { phone, consumed: false },
+      orderBy: { created_at: 'desc' },
+    });
   },
 
   async bumpOtpAttempts(id) {
-    await pool.query('UPDATE otp_verifications SET attempts = attempts + 1 WHERE id = ?', [id]);
+    await prisma.otp_verifications.update({ where: { id }, data: { attempts: { increment: 1 } } });
   },
 
   async consumeOtp(id) {
-    await pool.query('UPDATE otp_verifications SET consumed = 1 WHERE id = ?', [id]);
+    await prisma.otp_verifications.update({ where: { id }, data: { consumed: true } });
   },
 
-  // ── Refresh tokens ─────────────────────────────────────────────────────────
   async saveRefreshToken(userId, tokenHash, expiresAt) {
     const id = `rt-${crypto.randomUUID()}`;
-    await pool.query(
-      'INSERT INTO refresh_tokens (id, user_id, token_hash, expires_at, created_at) VALUES (?, ?, ?, ?, NOW())',
-      [id, userId, tokenHash, expiresAt],
-    );
+    await prisma.refresh_tokens.create({ data: { id, user_id: userId, token_hash: tokenHash, expires_at: expiresAt } });
   },
 
   async findRefreshToken(tokenHash) {
-    const [rows] = await pool.query(
-      `SELECT rt.*, u.email, ur.role
-       FROM refresh_tokens rt
-       JOIN users u ON u.id = rt.user_id
-       LEFT JOIN user_roles ur ON ur.user_id = rt.user_id
-       WHERE rt.token_hash = ? AND rt.revoked = 0 AND rt.expires_at > NOW()`,
-      [tokenHash],
-    );
+    const rows = await prisma.$queryRaw`
+      SELECT rt.*, u.email, ur.role
+      FROM refresh_tokens rt
+      JOIN users u ON u.id = rt.user_id
+      LEFT JOIN user_roles ur ON ur.user_id = rt.user_id
+      WHERE rt.token_hash = ${tokenHash} AND rt.revoked = 0 AND rt.expires_at > NOW()
+    `;
     return rows[0] ?? null;
   },
 
   async revokeRefreshToken(tokenHash) {
-    await pool.query('UPDATE refresh_tokens SET revoked = 1 WHERE token_hash = ?', [tokenHash]);
+    await prisma.refresh_tokens.updateMany({ where: { token_hash: tokenHash }, data: { revoked: true } });
   },
 };

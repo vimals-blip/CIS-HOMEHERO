@@ -1,64 +1,67 @@
 import crypto from 'node:crypto';
-import pool from '../db.js';
+import prisma from '../prisma.js';
 
 export const CmsModel = {
-  // ── Banners ───────────────────────────────────────────────────────────────
   async listBanners({ activeOnly = true } = {}) {
-    const where = activeOnly ? 'WHERE is_active = 1' : '';
-    const [rows] = await pool.query(`SELECT * FROM banners ${where} ORDER BY sort_order ASC, created_at DESC`);
-    return rows ?? [];
+    return prisma.banners.findMany({
+      where: activeOnly ? { is_active: true } : undefined,
+      orderBy: [{ sort_order: 'asc' }, { created_at: 'desc' }],
+    });
   },
+
   async createBanner({ title, imageUrl, linkUrl, sortOrder }) {
     const id = `ban-${crypto.randomUUID()}`;
-    await pool.query(
-      'INSERT INTO banners (id, title, image_url, link_url, sort_order, is_active, created_at) VALUES (?, ?, ?, ?, ?, 1, NOW())',
-      [id, title, imageUrl, linkUrl ?? null, sortOrder ?? 0],
-    );
+    await prisma.banners.create({
+      data: { id, title, image_url: imageUrl, link_url: linkUrl ?? null, sort_order: sortOrder ?? 0, is_active: true },
+    });
     return id;
   },
+
   async setBannerActive(id, isActive) {
-    await pool.query('UPDATE banners SET is_active = ? WHERE id = ?', [Number(isActive), id]);
+    await prisma.banners.update({ where: { id }, data: { is_active: isActive } });
   },
 
-  // ── CMS pages ───────────────────────────────────────────────────────────────
   async getPage(slug) {
-    const [rows] = await pool.query('SELECT * FROM cms_pages WHERE slug = ?', [slug]);
-    return rows[0] ?? null;
+    return prisma.cms_pages.findUnique({ where: { slug } });
   },
+
   async upsertPage({ slug, title, body }) {
-    await pool.query(
-      `INSERT INTO cms_pages (slug, title, body, updated_at) VALUES (?, ?, ?, NOW())
-       ON DUPLICATE KEY UPDATE title = VALUES(title), body = VALUES(body), updated_at = NOW()`,
-      [slug, title, body ?? null],
-    );
+    await prisma.cms_pages.upsert({
+      where: { slug },
+      create: { slug, title, body: body ?? null },
+      update: { title, body: body ?? null },
+    });
   },
 
-  // ── Settings ───────────────────────────────────────────────────────────────
   async getSettings({ publicOnly = false } = {}) {
-    const where = publicOnly ? 'WHERE is_public = 1' : '';
-    const [rows] = await pool.query(`SELECT setting_key, setting_value, is_public FROM settings ${where}`);
-    return rows ?? [];
-  },
-  async setSetting(key, value, isPublic) {
-    await pool.query(
-      `INSERT INTO settings (setting_key, setting_value, is_public, updated_at) VALUES (?, ?, ?, NOW())
-       ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), is_public = VALUES(is_public), updated_at = NOW()`,
-      [key, value, isPublic ? 1 : 0],
-    );
+    return prisma.settings.findMany({
+      where: publicOnly ? { is_public: true } : undefined,
+      select: { setting_key: true, setting_value: true, is_public: true },
+    });
   },
 
-  // ── Cities (super-admin) ─────────────────────────────────────────────────────
-  async listCities({ activeOnly = false } = {}) {
-    const where = activeOnly ? 'WHERE is_active = 1' : '';
-    const [rows] = await pool.query(`SELECT * FROM cities ${where} ORDER BY name ASC`);
-    return rows ?? [];
+  async setSetting(key, value, isPublic) {
+    await prisma.settings.upsert({
+      where: { setting_key: key },
+      create: { setting_key: key, setting_value: value, is_public: isPublic ? true : false },
+      update: { setting_value: value, is_public: isPublic ? true : false },
+    });
   },
+
+  async listCities({ activeOnly = false } = {}) {
+    return prisma.cities.findMany({
+      where: activeOnly ? { is_active: true } : undefined,
+      orderBy: { name: 'asc' },
+    });
+  },
+
   async createCity({ name, state }) {
     const id = `city-${crypto.randomUUID()}`;
-    await pool.query('INSERT INTO cities (id, name, state, is_active, created_at) VALUES (?, ?, ?, 1, NOW())', [id, name, state ?? null]);
+    await prisma.cities.create({ data: { id, name, state: state ?? null, is_active: true } });
     return id;
   },
+
   async setCityActive(id, isActive) {
-    await pool.query('UPDATE cities SET is_active = ? WHERE id = ?', [Number(isActive), id]);
+    await prisma.cities.update({ where: { id }, data: { is_active: isActive } });
   },
 };

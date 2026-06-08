@@ -1,48 +1,37 @@
 import crypto from 'node:crypto';
-import pool from '../db.js';
+import prisma from '../prisma.js';
 
 const round2 = (n) => Math.round(Number(n) * 100) / 100;
 
 export const CouponModel = {
   async findAll() {
-    const [rows] = await pool.query('SELECT * FROM coupons ORDER BY created_at DESC');
-    return rows ?? [];
+    return prisma.coupons.findMany({ orderBy: { created_at: 'desc' } });
   },
 
   async findByCode(code) {
-    const [rows] = await pool.query('SELECT * FROM coupons WHERE code = ?', [code]);
-    return rows[0] ?? null;
+    return prisma.coupons.findUnique({ where: { code } });
   },
 
   async findById(id) {
-    const [rows] = await pool.query('SELECT * FROM coupons WHERE id = ?', [id]);
-    return rows[0] ?? null;
+    return prisma.coupons.findUnique({ where: { id } });
   },
 
   async create({ code, type, value, maxUses, expiresAt }) {
     const id = `coupon-${crypto.randomUUID()}`;
-    await pool.query(
-      'INSERT INTO coupons (id, code, type, value, used_count, max_uses, is_active, expires_at, created_at) VALUES (?, ?, ?, ?, 0, ?, 1, ?, NOW())',
-      [id, code, type, value, maxUses ?? null, expiresAt ?? null],
-    );
+    await prisma.coupons.create({
+      data: { id, code, type, value, used_count: 0, max_uses: maxUses ?? null, is_active: true, expires_at: expiresAt ?? null },
+    });
     return { id, code, type, value, is_active: true };
   },
 
   async setActive(id, isActive) {
-    await pool.query('UPDATE coupons SET is_active = ? WHERE id = ?', [Number(isActive), id]);
+    await prisma.coupons.update({ where: { id }, data: { is_active: isActive } });
   },
 
-  // How many times this user has already redeemed this coupon.
   async usageCountForUser(couponId, userId) {
-    const [[row]] = await pool.query(
-      'SELECT COUNT(*) AS c FROM coupon_usage WHERE coupon_id = ? AND user_id = ?',
-      [couponId, userId],
-    );
-    return Number(row?.c ?? 0);
+    return prisma.coupon_usage.count({ where: { coupon_id: couponId, user_id: userId } });
   },
 
-  // Validate a coupon against a subtotal for a given user. Returns
-  // { coupon, discount } or throws a reason string via the `reason` field.
   async evaluate(code, subtotal, userId) {
     const coupon = await this.findByCode(String(code).toUpperCase());
     if (!coupon) return { ok: false, reason: 'Coupon not found.' };
@@ -53,7 +42,6 @@ export const CouponModel = {
     if (coupon.max_uses != null && coupon.used_count >= coupon.max_uses) {
       return { ok: false, reason: 'This coupon has reached its usage limit.' };
     }
-    // One redemption per customer.
     if (userId && (await this.usageCountForUser(coupon.id, userId)) > 0) {
       return { ok: false, reason: 'You have already used this coupon.' };
     }
@@ -67,10 +55,9 @@ export const CouponModel = {
 
   async recordUsage(couponId, userId, bookingId, discount) {
     const id = `cpu-${crypto.randomUUID()}`;
-    await pool.query(
-      'INSERT INTO coupon_usage (id, coupon_id, user_id, booking_id, discount, created_at) VALUES (?, ?, ?, ?, ?, NOW())',
-      [id, couponId, userId, bookingId ?? null, discount],
-    );
-    await pool.query('UPDATE coupons SET used_count = used_count + 1 WHERE id = ?', [couponId]);
+    await prisma.coupon_usage.create({
+      data: { id, coupon_id: couponId, user_id: userId, booking_id: bookingId ?? null, discount },
+    });
+    await prisma.coupons.update({ where: { id: couponId }, data: { used_count: { increment: 1 } } });
   },
 };

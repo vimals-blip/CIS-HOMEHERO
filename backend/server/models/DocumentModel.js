@@ -1,39 +1,36 @@
 import crypto from 'node:crypto';
-import pool from '../db.js';
+import prisma from '../prisma.js';
 
 export const DocumentModel = {
   async listForExpert(expertId) {
-    const [rows] = await pool.query(
-      'SELECT id, type, file_url, status, review_note, created_at FROM expert_documents WHERE expert_id = ? ORDER BY created_at DESC',
-      [expertId],
-    );
-    return rows ?? [];
+    return prisma.expert_documents.findMany({
+      where: { expert_id: expertId },
+      select: { id: true, type: true, file_url: true, status: true, review_note: true, created_at: true },
+      orderBy: { created_at: 'desc' },
+    });
   },
 
   async findById(id) {
-    const [rows] = await pool.query('SELECT * FROM expert_documents WHERE id = ?', [id]);
-    return rows[0] ?? null;
+    return prisma.expert_documents.findUnique({ where: { id } });
   },
 
-  // One document per type per expert — re-uploading replaces the prior one.
   async upsert(expertId, type, fileUrl) {
-    const [existing] = await pool.query('SELECT id FROM expert_documents WHERE expert_id = ? AND type = ?', [expertId, type]);
-    if (existing[0]) {
-      await pool.query(
-        "UPDATE expert_documents SET file_url = ?, status = 'PENDING', review_note = NULL, updated_at = NOW() WHERE id = ?",
-        [fileUrl, existing[0].id],
-      );
-      return existing[0].id;
+    const existing = await prisma.expert_documents.findFirst({ where: { expert_id: expertId, type } });
+    if (existing) {
+      await prisma.expert_documents.update({
+        where: { id: existing.id },
+        data: { file_url: fileUrl, status: 'PENDING', review_note: null },
+      });
+      return existing.id;
     }
     const id = `doc-${crypto.randomUUID()}`;
-    await pool.query(
-      "INSERT INTO expert_documents (id, expert_id, type, file_url, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'PENDING', NOW(), NOW())",
-      [id, expertId, type, fileUrl],
-    );
+    await prisma.expert_documents.create({
+      data: { id, expert_id: expertId, type, file_url: fileUrl, status: 'PENDING' },
+    });
     return id;
   },
 
   async setStatus(id, status, note) {
-    await pool.query('UPDATE expert_documents SET status = ?, review_note = ?, updated_at = NOW() WHERE id = ?', [status, note ?? null, id]);
+    await prisma.expert_documents.update({ where: { id }, data: { status, review_note: note ?? null } });
   },
 };

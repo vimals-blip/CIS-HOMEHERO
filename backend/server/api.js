@@ -3,7 +3,7 @@ import http from 'node:http';
 import express from 'express';
 import helmet from 'helmet';
 import compression from 'compression';
-import pool from './db.js';
+import prisma from './prisma.js';
 import { corsMiddleware } from './middleware/cors.js';
 import { sanitizeBody } from './middleware/sanitize.js';
 import { apiLimiter } from './middleware/rateLimit.js';
@@ -53,7 +53,7 @@ app.use(sanitizeBody);
 // Health check — exempt from rate limiting so load balancers can probe freely.
 app.get(`${BASE}/health`, async (_req, res) => {
   try {
-    await pool.query('SELECT 1');
+    await prisma.$queryRaw`SELECT 1`;
     res.json({ status: 'ok', db: 'connected' });
   } catch {
     res.status(503).json({ status: 'degraded', db: 'unreachable' });
