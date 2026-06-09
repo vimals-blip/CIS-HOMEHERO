@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Sparkles, Smartphone, Mail, ArrowLeft } from "lucide-react";
+import { Sparkles, Smartphone, Mail, ArrowLeft, Eye, EyeOff, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,8 +15,8 @@ export const Route = createFileRoute("/auth/login")({
 });
 
 const passwordSchema = z.object({
-  email: z.string().email("Enter a valid email"),
-  password: z.string().min(6, "At least 6 characters"),
+  email: z.string().email("Enter a valid email address"),
+  password: z.string().min(1, "Password is required"),
 });
 
 type Mode = "otp" | "password";
@@ -25,23 +25,22 @@ function Login() {
   const navigate = useNavigate();
   const [mode, setMode] = useState<Mode>("otp");
 
-  // Password state
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
-  // OTP state
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [fieldErr, setFieldErr] = useState<{ email?: string; password?: string }>({});
 
   const onLogin = (result: any) => {
     if (!result?.accessToken) throw new Error("Login failed: invalid server response.");
     setTokens(result.accessToken, result.refreshToken);
     toast.success("Welcome back!");
-    // Land each role on its home surface.
     const role = result.user?.role;
     const dest = role === "ADMIN" || role === "SUPER_ADMIN" ? "/admin" : role === "EXPERT" ? "/expert" : "/";
     navigate({ to: dest });
@@ -50,14 +49,27 @@ function Login() {
   const submitPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr(null);
+    setFieldErr({});
+
     const parsed = passwordSchema.safeParse({ email, password });
-    if (!parsed.success) { setErr(parsed.error.issues[0].message); return; }
+    if (!parsed.success) {
+      const errs: Record<string, string> = {};
+      parsed.error.issues.forEach((i) => { if (i.path[0]) errs[i.path[0] as string] = i.message; });
+      setFieldErr(errs);
+      return;
+    }
+
     setLoading(true);
     try {
       onLogin(await apiFetch("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }));
     } catch (error: any) {
-      setErr(error.message ?? "Login failed");
-      toast.error(error.message ?? "Login failed");
+      const msg = error.message ?? "Login failed";
+      // Highlight the password field specifically for credential errors
+      if (msg.toLowerCase().includes("invalid email or password") || msg.toLowerCase().includes("credentials")) {
+        setFieldErr({ password: "Invalid email or password — please try again" });
+      } else {
+        setErr(msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -71,7 +83,6 @@ function Login() {
     try {
       const res = await apiFetch("/auth/otp/request", { method: "POST", body: JSON.stringify({ phone }) });
       setOtpSent(true);
-      // In dev the API returns the OTP so it can be tested without SMS.
       if (res.dev_otp) toast.info(`Dev OTP: ${res.dev_otp}`);
       else toast.success("OTP sent to your phone");
     } catch (error: any) {
@@ -107,13 +118,13 @@ function Login() {
 
       {/* Mode toggle */}
       <div className="mt-8 flex gap-1 rounded-xl border bg-muted/40 p-1">
-        <button onClick={() => { setMode("otp"); setErr(null); }} className={cn(
+        <button onClick={() => { setMode("otp"); setErr(null); setFieldErr({}); }} className={cn(
           "flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors",
           mode === "otp" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
         )}>
           <Smartphone className="h-4 w-4" /> Mobile OTP
         </button>
-        <button onClick={() => { setMode("password"); setErr(null); }} className={cn(
+        <button onClick={() => { setMode("password"); setErr(null); setFieldErr({}); }} className={cn(
           "flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors",
           mode === "password" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
         )}>
@@ -130,7 +141,7 @@ function Login() {
                 <Input id="phone" inputMode="numeric" value={phone} onChange={(e) => setPhone(e.target.value)}
                   placeholder="10-digit mobile number" autoComplete="tel" />
               </div>
-              {err && <p className="text-sm text-destructive">{err}</p>}
+              {err && <ErrorBox message={err} />}
               <Button type="submit" className="w-full" disabled={loading}>{loading ? "Sending…" : "Send OTP"}</Button>
             </form>
           ) : (
@@ -144,7 +155,7 @@ function Login() {
                 <Input id="otp" inputMode="numeric" value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
                   maxLength={6} placeholder="6-digit code" className="text-center text-lg tracking-[0.3em]" autoFocus />
               </div>
-              {err && <p className="text-sm text-destructive">{err}</p>}
+              {err && <ErrorBox message={err} />}
               <Button type="submit" className="w-full" disabled={loading}>{loading ? "Verifying…" : "Verify & continue"}</Button>
               <button type="button" onClick={requestOtp} className="w-full text-center text-xs text-primary hover:underline">Resend OTP</button>
             </form>
@@ -152,16 +163,49 @@ function Login() {
         </div>
       ) : (
         <form onSubmit={submitPassword} className="mt-4 space-y-4 rounded-2xl border bg-card p-6">
-          <div>
+          {/* Email */}
+          <div className="space-y-1">
             <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
+            <Input
+              id="email" type="email" value={email}
+              onChange={(e) => { setEmail(e.target.value); setFieldErr((f) => ({ ...f, email: undefined })); }}
+              required autoComplete="email"
+              className={cn(fieldErr.email && "border-destructive focus-visible:ring-destructive")}
+            />
+            {fieldErr.email && <FieldError message={fieldErr.email} />}
           </div>
-          <div>
+
+          {/* Password with show/hide toggle */}
+          <div className="space-y-1">
             <Label htmlFor="password">Password</Label>
-            <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" />
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => { setPassword(e.target.value); setFieldErr((f) => ({ ...f, password: undefined })); }}
+                required autoComplete="current-password"
+                className={cn("pr-10", fieldErr.password && "border-destructive focus-visible:ring-destructive")}
+              />
+              <button type="button" tabIndex={-1}
+                onClick={() => setShowPassword((s) => !s)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+            {fieldErr.password && <FieldError message={fieldErr.password} />}
           </div>
-          {err && <p className="text-sm text-destructive">{err}</p>}
-          <Button type="submit" className="w-full" disabled={loading}>{loading ? "Signing in…" : "Log in"}</Button>
+
+          {err && <ErrorBox message={err} />}
+
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? "Signing in…" : "Log in"}
+          </Button>
+
+          <p className="text-center text-xs text-muted-foreground">
+            Forgot your password?{" "}
+            <Link to="/support" className="text-primary hover:underline">Contact support</Link>
+          </p>
         </form>
       )}
 
@@ -171,6 +215,23 @@ function Login() {
         {" · "}
         <Link to="/auth/signup-expert" className="font-medium text-primary hover:underline">Become an expert</Link>
       </div>
+    </div>
+  );
+}
+
+function FieldError({ message }: { message: string }) {
+  return (
+    <p className="flex items-center gap-1 text-xs text-destructive">
+      <AlertCircle className="h-3 w-3 shrink-0" /> {message}
+    </p>
+  );
+}
+
+function ErrorBox({ message }: { message: string }) {
+  return (
+    <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+      <span>{message}</span>
     </div>
   );
 }

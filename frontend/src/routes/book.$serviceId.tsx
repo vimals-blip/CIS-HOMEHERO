@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { Zap, CalendarClock, MapPin, Plus, Check, Tag, Wallet, Banknote, CreditCard, X, ChevronDown, ChevronUp, Star, Briefcase } from "lucide-react";
+import { Zap, CalendarClock, MapPin, Plus, Check, Tag, Wallet, Banknote, CreditCard, X, ChevronDown, ChevronUp, Star, Briefcase, LocateFixed, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -68,6 +68,7 @@ function BookService() {
   const [preferredExpertId, setPreferredExpertId] = useState<string | null>(null);
   const [saveNewAddr, setSaveNewAddr] = useState(false);
   const [newAddrLabel, setNewAddrLabel] = useState("Home");
+  const [locating, setLocating] = useState(false);
 
   const { data: service, isLoading } = useQuery({
     queryKey: ["service", serviceId],
@@ -92,13 +93,27 @@ function BookService() {
     queryFn: () => apiFetch(`/experts?service_id=${serviceId}&limit=20`),
   });
 
+  // Compute base price before early returns so the useEffect below is always called
+  // (React requires all hooks to run on every render regardless of loading state).
+  const totalHours = durationUnit === "days" ? durationValue * HRS_PER_DAY : durationValue;
+  const base = Number((service as any)?.rate_per_hour ?? 0) * totalHours;
+
+  // Re-validate applied coupon silently when base amount changes.
+  useEffect(() => {
+    if (!coupon || !service) return;
+    let cancelled = false;
+    apiFetch("/coupons/validate", { method: "POST", body: JSON.stringify({ code: coupon.code, amount: base }) })
+      .then((res) => { if (!cancelled) setCoupon({ code: res.code, discount: res.discount }); })
+      .catch(() => { if (!cancelled) setCoupon((c) => c ? { ...c, discount: 0 } : null); });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [base]);
+
   if (isLoading) return <div className="container mx-auto px-4 py-16"><LoadingSpinner /></div>;
   if (!service) return <div className="container mx-auto px-4 py-16 text-center text-muted-foreground">Service not found.</div>;
 
   const Icon = serviceIcon(service.icon_name);
   const PLATFORM_FEE_PCT = (Number(service.platform_fee_pct ?? 15)) / 100;
-  const totalHours = durationUnit === "days" ? durationValue * HRS_PER_DAY : durationValue;
-  const base = Number(service.rate_per_hour) * totalHours;
   const discount = coupon?.discount ?? 0;
   const total = Math.max(0, base - discount);
   const platformFee = Math.round(total * PLATFORM_FEE_PCT);
@@ -134,16 +149,37 @@ function BookService() {
 
   const clearCoupon = () => { setCoupon(null); setCouponInput(""); };
 
-  // Re-validate applied coupon silently when base amount changes.
-  useEffect(() => {
-    if (!coupon) return;
-    let cancelled = false;
-    apiFetch("/coupons/validate", { method: "POST", body: JSON.stringify({ code: coupon.code, amount: base }) })
-      .then((res) => { if (!cancelled) setCoupon({ code: res.code, discount: res.discount }); })
-      .catch(() => { if (!cancelled) setCoupon((c) => c ? { ...c, discount: 0 } : null); });
-    return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [base]);
+  const detectLocation = () => {
+    if (!navigator.geolocation) { toast.error("Geolocation is not supported by your browser"); return; }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        setGeoCoords({ lat: latitude, lng: longitude });
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
+            { headers: { "Accept-Language": "en" } },
+          );
+          const data = await res.json();
+          const a = data.address ?? {};
+          setAddr((prev) => ({
+            flat: prev.flat,
+            address_line: [a.road, a.suburb, a.neighbourhood].filter(Boolean).join(", ") || prev.address_line,
+            city: a.city || a.town || a.village || a.county || prev.city,
+            pincode: a.postcode || prev.pincode,
+          }));
+          toast.success("Location detected");
+        } catch {
+          toast.success("Location captured — fill in the address details");
+        } finally {
+          setLocating(false);
+        }
+      },
+      () => { toast.error("Could not get your location — please enter it manually"); setLocating(false); },
+      { timeout: 8000 },
+    );
+  };
 
   const confirm = async () => {
     if (!user) { toast.error("Please log in to book"); navigate({ to: "/auth/login" }); return; }
@@ -169,7 +205,7 @@ function BookService() {
       if (geoCoords) { body.lat = geoCoords.lat; body.lng = geoCoords.lng; }
       if (saveNewAddr) {
         try {
-          await apiFetch("/addresses", { method: "POST", body: JSON.stringify({ label: newAddrLabel || "Home", flat: addr.flat, address_line: addr.address_line, city: addr.city, pincode: addr.pincode }) });
+          await apiFetch("/addresses", { method: "POST", body: JSON.stringify({ label: newAddrLabel || "Home", flat: addr.flat, address_line: addr.address_line, city: addr.city, pincode: addr.pincode, lat: geoCoords?.lat, lng: geoCoords?.lng }) });
         } catch { /* non-fatal */ }
       }
     }
@@ -359,6 +395,15 @@ function BookService() {
                 </button>
               ) : (
                 <div className="rounded-xl border p-3 space-y-3">
+                  <button
+                    type="button"
+                    onClick={detectLocation}
+                    disabled={locating}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-primary/40 bg-primary/5 py-2 text-sm font-medium text-primary hover:bg-primary/10 disabled:opacity-60"
+                  >
+                    {locating ? <Loader2 className="h-4 w-4 animate-spin" /> : <LocateFixed className="h-4 w-4" />}
+                    {locating ? "Detecting location…" : "Use my current location"}
+                  </button>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <Input placeholder="Flat / House no." value={addr.flat} onChange={(e) => setAddr({ ...addr, flat: e.target.value })} />
                     <Input placeholder="Street / Area *" value={addr.address_line} onChange={(e) => setAddr({ ...addr, address_line: e.target.value })} />
@@ -496,7 +541,7 @@ function BookService() {
             </div>
             {walletShort && <p className="mt-2 text-xs text-destructive">Insufficient balance. Top up in your wallet or pay with cash.</p>}
             {paymentMethod === "ONLINE" && (
-              <p className="mt-2 text-xs text-muted-foreground">You'll be redirected to the secure Razorpay checkout after placing the booking.</p>
+              <p className="mt-2 text-xs text-muted-foreground">You'll be redirected to the secure payment page. Expert is assigned only after payment is complete.</p>
             )}
           </div>
         </div>

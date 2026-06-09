@@ -172,28 +172,34 @@ export const bookingController = {
       }
     }
 
+    // For ONLINE payments, hold dispatch until payment is verified — prevents
+    // locking an expert against an unpaid booking if the customer abandons checkout.
+    const holdForPayment = payment_method === 'ONLINE';
+
     // Dispatch: prefer a customer-requested expert if they are available.
     let expert = null;
     let etaMinutes = null;
-    if (preferred_expert_id) {
-      const preferredRow = await ExpertModel.findById(preferred_expert_id);
-      if (preferredRow && preferredRow.status === 'ONLINE' && !Boolean(preferredRow.is_blocked)) {
-        const activeBusyCount = await prisma.bookings.count({
-          where: {
-            expert_id: preferred_expert_id,
-            status: { in: ['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'IN_PROGRESS'] },
-          },
-        });
-        if (activeBusyCount === 0) {
-          expert = preferredRow;
-          etaMinutes = booking_type === 'INSTANT' ? randomEta() : null;
+    if (!holdForPayment) {
+      if (preferred_expert_id) {
+        const preferredRow = await ExpertModel.findById(preferred_expert_id);
+        if (preferredRow && preferredRow.status === 'ONLINE' && !Boolean(preferredRow.is_blocked)) {
+          const activeBusyCount = await prisma.bookings.count({
+            where: {
+              expert_id: preferred_expert_id,
+              status: { in: ['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'IN_PROGRESS'] },
+            },
+          });
+          if (activeBusyCount === 0) {
+            expert = preferredRow;
+            etaMinutes = booking_type === 'INSTANT' ? randomEta() : null;
+          }
         }
       }
-    }
-    if (!expert) {
-      const match = await dispatchService.findBestExpert(service_id, { lat: latVal, lng: lngVal });
-      expert = match?.expert ?? null;
-      etaMinutes = expert && booking_type === 'INSTANT' ? dispatchService.etaMinutes(match.distance) : null;
+      if (!expert) {
+        const match = await dispatchService.findBestExpert(service_id, { lat: latVal, lng: lngVal });
+        expert = match?.expert ?? null;
+        etaMinutes = expert && booking_type === 'INSTANT' ? dispatchService.etaMinutes(match.distance) : null;
+      }
     }
     const assigned = Boolean(expert);
     const status = assigned ? 'ASSIGNED' : 'SEARCHING';
@@ -239,7 +245,10 @@ export const bookingController = {
     if (couponRow) await CouponModel.recordUsage(couponRow.id, req.user.id, bookingId, discount);
 
     await BookingModel.addEvent(bookingId, 'SEARCHING', STATUS_MESSAGE.SEARCHING);
-    await notify(req.user.id, { type: 'booking_created', title: 'Booking placed', body: `Your ${service.name} booking is confirmed.`, bookingId });
+    const createdBody = holdForPayment
+      ? `Your ${service.name} booking is awaiting payment.`
+      : `Your ${service.name} booking is confirmed.`;
+    await notify(req.user.id, { type: 'booking_created', title: 'Booking placed', body: createdBody, bookingId });
 
     if (assigned) {
       await BookingModel.addEvent(bookingId, 'ASSIGNED', STATUS_MESSAGE.ASSIGNED);
@@ -257,7 +266,14 @@ export const bookingController = {
     let gatewayOrder = null;
     if (payment_method === 'ONLINE' && total > 0) {
       const origin = req.headers.origin || req.headers.referer || '';
-      gatewayOrder = await paymentProvider.createOrder({ amount: total, receipt: `booking_${bookingId}`, origin });
+      const durationLabel = `${duration} hr${duration !== 1 ? 's' : ''}`;
+      gatewayOrder = await paymentProvider.createOrder({
+        amount:      total,
+        receipt:     `booking_${bookingId}`,
+        origin,
+        description: `${service.name} · ${durationLabel}`,
+        metadata:    { booking_id: bookingId, service: service.name, customer_id: req.user.id },
+      });
       await PaymentTxnModel.create({
         userId: req.user.id,
         bookingId,

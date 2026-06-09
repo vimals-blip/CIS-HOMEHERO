@@ -53,7 +53,7 @@ export function invalidateGatewayCache() {
 }
 
 export const paymentProvider = {
-  async createOrder({ amount, receipt, origin }) {
+  async createOrder({ amount, receipt, origin, description = null, metadata = {} }) {
     const cfg = await getGatewayConfig();
     const amountPaise = Math.round(Number(amount) * 100);
 
@@ -79,16 +79,26 @@ export const paymentProvider = {
         ? `${baseUrl}/bookings`
         : `${baseUrl}/wallet?stripe_cancel=1`;
 
+      const productName = description || (bookingId ? 'HomeHero Booking' : 'HomeHero Wallet Top-up');
+
       const params = new URLSearchParams({
         'payment_method_types[]':                             'card',
         'line_items[0][price_data][currency]':                'inr',
         'line_items[0][price_data][unit_amount]':             String(amountPaise),
-        'line_items[0][price_data][product_data][name]':      bookingId ? 'HomeHero Booking' : 'HomeHero Wallet',
+        'line_items[0][price_data][product_data][name]':      productName,
         'line_items[0][quantity]':                            '1',
         'mode':                                               'payment',
         'success_url':                                        successUrl,
         'cancel_url':                                         cancelUrl,
+        // Description appears next to the payment in the Stripe dashboard
+        'payment_intent_data[description]':                   productName,
       });
+
+      // Attach structured metadata so every payment is traceable in the dashboard
+      const allMeta = { source: 'homehero', receipt, ...metadata };
+      for (const [k, v] of Object.entries(allMeta)) {
+        if (v != null) params.append(`payment_intent_data[metadata][${k}]`, String(v));
+      }
 
       const res = await fetch('https://api.stripe.com/v1/checkout/sessions', {
         method: 'POST',
@@ -119,7 +129,13 @@ export const paymentProvider = {
         'Content-Type': 'application/json',
         Authorization:  'Basic ' + Buffer.from(`${cfg.keyId}:${cfg.keySecret}`).toString('base64'),
       },
-      body: JSON.stringify({ amount: amountPaise, currency: 'INR', receipt }),
+      body: JSON.stringify({
+        amount: amountPaise,
+        currency: 'INR',
+        receipt,
+        ...(description && { description }),
+        notes: { source: 'homehero', receipt, ...metadata },
+      }),
     });
     if (!res.ok) throw new Error('Razorpay order creation failed.');
     const order = await res.json();

@@ -1,11 +1,12 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import { toast } from "sonner";
 import {
   Check, Sparkles, Upload, Loader2, CreditCard, IdCard, Camera, X,
   Plus, Minus, ChevronRight, User, Briefcase, FileCheck, ArrowRight,
+  Eye, EyeOff, AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,8 +25,26 @@ const step1Schema = z.object({
   email: z.string().email("Enter a valid email address"),
   phone: z.string().trim().min(7, "Enter a valid phone number").max(20),
   city: z.string().trim().min(2, "City is required").max(80),
-  password: z.string().min(6, "Password must be at least 6 characters"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
 });
+
+const PW_RULES = [
+  { id: "len",     label: "At least 8 characters",        test: (p: string) => p.length >= 8 },
+  { id: "upper",   label: "One uppercase letter (A–Z)",   test: (p: string) => /[A-Z]/.test(p) },
+  { id: "number",  label: "One number (0–9)",              test: (p: string) => /[0-9]/.test(p) },
+  { id: "special", label: "One special character (!@#…)", test: (p: string) => /[^A-Za-z0-9]/.test(p) },
+];
+
+function pwStrength(pw: string): 0 | 1 | 2 | 3 {
+  const n = PW_RULES.filter((r) => r.test(pw)).length;
+  if (!pw) return 0;
+  if (n <= 2) return 1;
+  if (n === 3) return 2;
+  return 3;
+}
+const STRENGTH_LABEL = ["", "Weak", "Fair", "Strong"] as const;
+const STRENGTH_COLOR = ["", "bg-destructive", "bg-amber-400", "bg-emerald-500"] as const;
+const STRENGTH_TEXT  = ["", "text-destructive", "text-amber-600", "text-emerald-600"] as const;
 
 type FieldErrors = Partial<Record<string, string>>;
 
@@ -47,7 +66,11 @@ const STEPS = [
 
 function FieldError({ msg }: { msg?: string }) {
   if (!msg) return null;
-  return <p className="mt-1 text-xs text-destructive">{msg}</p>;
+  return (
+    <p className="flex items-center gap-1 mt-1 text-xs text-destructive">
+      <AlertCircle className="h-3 w-3 shrink-0" /> {msg}
+    </p>
+  );
 }
 
 function SignupExpert() {
@@ -61,6 +84,9 @@ function SignupExpert() {
     name: "", email: "", phone: "", city: "", password: "", bio: "",
     gender: "FEMALE" as typeof GENDERS[number], experience: 0,
   });
+  const [showPassword, setShowPassword] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [confirmTouched, setConfirmTouched] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [docs, setDocs] = useState<Record<DocType, File | null>>({ AADHAAR: null, PAN: null, SELFIE: null });
   const prevStep = useRef(1);
@@ -77,6 +103,10 @@ function SignupExpert() {
     setErrors({});
   };
 
+  const pwStrengthLevel = useMemo(() => pwStrength(info.password), [info.password]);
+  const pwRuleResults   = useMemo(() => PW_RULES.map((r) => ({ ...r, ok: r.test(info.password) })), [info.password]);
+  const passwordMismatch = confirmTouched && confirmPassword.length > 0 && confirmPassword !== info.password;
+
   const next = () => {
     if (step === 1) {
       const p = step1Schema.safeParse(info);
@@ -85,6 +115,18 @@ function SignupExpert() {
         p.error.issues.forEach((iss) => { if (iss.path[0]) errs[String(iss.path[0])] = iss.message; });
         setErrors(errs);
         toast.error(p.error.issues[0].message);
+        return;
+      }
+      const failedRule = PW_RULES.find((r) => !r.test(info.password));
+      if (failedRule) {
+        setErrors((e) => ({ ...e, password: failedRule.label }));
+        toast.error("Password doesn't meet all requirements");
+        return;
+      }
+      if (confirmPassword !== info.password) {
+        setErrors((e) => ({ ...e, confirm: "Passwords do not match" }));
+        setConfirmTouched(true);
+        toast.error("Passwords do not match");
         return;
       }
     }
@@ -264,10 +306,79 @@ function SignupExpert() {
                       <Input placeholder="Bengaluru" {...bind("city")} />
                       <FieldError msg={errors.city} />
                     </div>
-                    <div className="sm:col-span-2">
+                    <div className="sm:col-span-2 space-y-1">
                       <Label>Password</Label>
-                      <Input type="password" placeholder="At least 6 characters" {...bind("password")} />
-                      <FieldError msg={errors.password} />
+                      <div className="relative">
+                        <Input
+                          type={showPassword ? "text" : "password"}
+                          placeholder="At least 8 characters"
+                          autoComplete="new-password"
+                          {...bind("password")}
+                          className={cn("pr-10 mt-1", errors.password && "border-destructive focus-visible:ring-destructive")}
+                        />
+                        <button type="button" tabIndex={-1}
+                          onClick={() => setShowPassword((s) => !s)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+
+                      {info.password.length > 0 && (
+                        <div className="mt-2 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <div className="flex flex-1 gap-1">
+                              {[1, 2, 3].map((level) => (
+                                <div key={level} className={cn(
+                                  "h-1.5 flex-1 rounded-full transition-colors duration-300",
+                                  pwStrengthLevel >= level ? STRENGTH_COLOR[pwStrengthLevel] : "bg-muted",
+                                )} />
+                              ))}
+                            </div>
+                            <span className={cn("text-xs font-medium", STRENGTH_TEXT[pwStrengthLevel])}>
+                              {STRENGTH_LABEL[pwStrengthLevel]}
+                            </span>
+                          </div>
+                          <ul className="space-y-1">
+                            {pwRuleResults.map((r) => (
+                              <li key={r.id} className={cn("flex items-center gap-1.5 text-xs transition-colors",
+                                r.ok ? "text-emerald-600" : "text-muted-foreground")}>
+                                {r.ok
+                                  ? <Check className="h-3 w-3 shrink-0 text-emerald-500" />
+                                  : <X className="h-3 w-3 shrink-0 text-muted-foreground/50" />}
+                                {r.label}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {errors.password && !info.password && <FieldError msg={errors.password} />}
+                    </div>
+
+                    <div className="sm:col-span-2 space-y-1">
+                      <Label>Confirm password</Label>
+                      <div className="relative">
+                        <Input
+                          type={showPassword ? "text" : "password"}
+                          placeholder="Re-enter your password"
+                          autoComplete="new-password"
+                          value={confirmPassword}
+                          onChange={(e) => { setConfirmPassword(e.target.value); setErrors((er) => { const n = { ...er }; delete n.confirm; return n; }); }}
+                          onBlur={() => setConfirmTouched(true)}
+                          className={cn("pr-10 mt-1", (passwordMismatch || errors.confirm) && "border-destructive focus-visible:ring-destructive")}
+                        />
+                        <button type="button" tabIndex={-1}
+                          onClick={() => setShowPassword((s) => !s)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                      {passwordMismatch && <FieldError msg="Passwords do not match" />}
+                      {errors.confirm && !passwordMismatch && <FieldError msg={errors.confirm} />}
+                      {!passwordMismatch && confirmPassword.length > 0 && confirmPassword === info.password && (
+                        <p className="flex items-center gap-1 text-xs text-emerald-600 mt-1">
+                          <Check className="h-3 w-3" /> Passwords match
+                        </p>
+                      )}
                     </div>
                     <div className="sm:col-span-2">
                       <Label>Short bio <span className="text-muted-foreground font-normal">(optional)</span></Label>

@@ -2,7 +2,10 @@ import { PaymentTxnModel } from '../models/PaymentTxnModel.js';
 import { WalletModel } from '../models/WalletModel.js';
 import { PaymentModel } from '../models/PaymentModel.js';
 import { BookingModel } from '../models/BookingModel.js';
+import { ExpertModel } from '../models/ExpertModel.js';
 import { paymentProvider } from '../providers/paymentProvider.js';
+import { dispatchService } from '../services/dispatchService.js';
+import { notify } from '../services/notificationService.js';
 import { BadRequest, NotFound, HttpError } from '../errors.js';
 
 const MAX_AMOUNT = 100000;
@@ -15,7 +18,13 @@ export const paymentController = {
     if (amount > MAX_AMOUNT) throw BadRequest('AMOUNT_TOO_LARGE', `Maximum is ₹${MAX_AMOUNT}.`);
 
     const origin = req.headers.origin || req.headers.referer || '';
-    const order  = await paymentProvider.createOrder({ amount, receipt: `rcpt_${Date.now()}`, origin });
+    const order  = await paymentProvider.createOrder({
+      amount,
+      receipt:     `rcpt_${Date.now()}`,
+      origin,
+      description: purpose === 'BOOKING' ? 'HomeHero Booking Payment' : `HomeHero Wallet Top-up · ₹${amount}`,
+      metadata:    { purpose, customer_id: req.user.id },
+    });
 
     await PaymentTxnModel.create({
       userId:    req.user.id,
@@ -72,6 +81,26 @@ export const paymentController = {
       if (booking && booking.payment_status !== 'PAID') {
         await BookingModel.updateStatus(txn.booking_id, booking.status, { paymentStatus: 'PAID' });
         await PaymentModel.create({ bookingId: txn.booking_id, amount: Number(txn.amount), method: 'CARD', status: 'PAID' });
+
+        // Dispatch now that payment is confirmed — only needed when booking is still
+        // SEARCHING (ONLINE payment bookings hold dispatch until this point).
+        if (booking.status === 'SEARCHING' && !booking.expert_id) {
+          const match = await dispatchService.findBestExpert(
+            booking.service_id,
+            { lat: booking.lat ? Number(booking.lat) : null, lng: booking.lng ? Number(booking.lng) : null },
+          );
+          if (match?.expert) {
+            await BookingModel.assignExpert(txn.booking_id, match.expert.id, dispatchService.etaMinutes(match.distance));
+            await BookingModel.addEvent(txn.booking_id, 'ASSIGNED', 'Expert assigned to your booking');
+            await ExpertModel.setStatus(match.expert.id, 'BUSY');
+            await notify(match.expert.id, { type: 'job_assigned', title: 'New job assigned', body: `${booking.service_name} · ${booking.address_snapshot}`, bookingId: txn.booking_id });
+            booking = await BookingModel.findById(txn.booking_id);
+          } else {
+            dispatchService.scheduleRetry(txn.booking_id);
+          }
+        }
+
+        await notify(req.user.id, { type: 'payment_confirmed', title: 'Payment confirmed!', body: 'Your booking is now active.', bookingId: txn.booking_id });
       }
     }
 

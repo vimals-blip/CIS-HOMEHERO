@@ -1,936 +1,2304 @@
-# HomeHero — Developer Guide
+# HomeHero — Complete Developer Guide
 
-This document explains the entire codebase: how it is structured, why each part exists, how the key flows work end-to-end, and exactly where to touch things when you need to add or change a feature.
+> **Who this is for:** A developer with about 1 year of JavaScript experience. You do not need to already know Node.js, Express, Prisma, or Socket.IO. This guide teaches each technology *as it is used in this project* — explaining what it is, why it was chosen, where to find it in the code, and how to work with it.
 
 ---
 
 ## Table of Contents
 
-1. [What is HomeHero?](#1-what-is-homehero)
-2. [Tech Stack](#2-tech-stack)
-3. [Repository Layout](#3-repository-layout)
-4. [Running Locally](#4-running-locally)
+1. [What Is HomeHero?](#1-what-is-homehero)
+2. [Technology Stack — What Each Tool Is and Why We Use It](#2-technology-stack)
+3. [First-Time Local Setup](#3-first-time-local-setup)
+4. [Project Folder Structure](#4-project-folder-structure)
 5. [Environment Variables](#5-environment-variables)
-6. [Backend Architecture](#6-backend-architecture)
-   - 6.1 [Monolith vs Microservices](#61-monolith-vs-microservices)
-   - 6.2 [API Gateway](#62-api-gateway)
-   - 6.3 [Request Lifecycle](#63-request-lifecycle)
-   - 6.4 [Auth — JWT + Refresh Tokens](#64-auth--jwt--refresh-tokens)
-   - 6.5 [Database Layer — Models](#65-database-layer--models)
-   - 6.6 [Routes → Controllers](#66-routes--controllers)
-   - 6.7 [Middleware Stack](#67-middleware-stack)
-   - 6.8 [Providers — Mock → Real](#68-providers--mock--real)
-   - 6.9 [Booking Dispatch Service](#69-booking-dispatch-service)
-   - 6.10 [Realtime — Socket.IO](#610-realtime--socketio)
-   - 6.11 [Response Caching](#611-response-caching)
-   - 6.12 [File Uploads](#612-file-uploads)
-7. [Database Schema](#7-database-schema)
-   - 7.1 [Core Tables](#71-core-tables)
-   - 7.2 [Booking Status Flow](#72-booking-status-flow)
-   - 7.3 [Payment Status Flow](#73-payment-status-flow)
-8. [Frontend Architecture](#8-frontend-architecture)
-   - 8.1 [Routing — TanStack Router](#81-routing--tanstack-router)
-   - 8.2 [Data Fetching — TanStack Query](#82-data-fetching--tanstack-query)
+6. [Backend — How It Works](#6-backend)
+   - 6.1 [Express.js — The Web Framework](#61-expressjs)
+   - 6.2 [How a Request Travels Through the App](#62-request-lifecycle)
+   - 6.3 [Authentication — JWT and Refresh Tokens](#63-authentication)
+   - 6.4 [Database — Prisma ORM and MySQL](#64-database)
+   - 6.5 [Routes and Controllers](#65-routes-and-controllers)
+   - 6.6 [Middleware — Every Piece Explained](#66-middleware)
+   - 6.7 [Payment Gateway — Razorpay and Stripe](#67-payment-gateway)
+   - 6.8 [Booking Dispatch — How Experts Are Matched](#68-booking-dispatch)
+   - 6.9 [Real-Time — Socket.IO Explained](#69-real-time)
+   - 6.10 [File Uploads](#610-file-uploads)
+   - 6.11 [Notifications](#611-notifications)
+   - 6.12 [Caching](#612-caching)
+   - 6.13 [Error Handling](#613-error-handling)
+7. [Database Schema — Every Table](#7-database-schema)
+8. [Frontend — How It Works](#8-frontend)
+   - 8.1 [TanStack Router — File-Based Routing](#81-tanstack-router)
+   - 8.2 [TanStack Query — Data Fetching](#82-tanstack-query)
    - 8.3 [Auth Context](#83-auth-context)
-   - 8.4 [API Client — lib/api.ts](#84-api-client--libapits)
-   - 8.5 [Socket Client](#85-socket-client)
-   - 8.6 [Pages Reference](#86-pages-reference)
-9. [Key End-to-End Flows](#9-key-end-to-end-flows)
-   - 9.1 [Customer Books a Service](#91-customer-books-a-service)
-   - 9.2 [Payment — Cash / Wallet / Online](#92-payment--cash--wallet--online)
-   - 9.3 [Expert Signup + KYC](#93-expert-signup--kyc)
-   - 9.4 [Live Booking Tracking](#94-live-booking-tracking)
-10. [Admin Panel](#10-admin-panel)
-11. [Adding a New Feature — Checklist](#11-adding-a-new-feature--checklist)
-12. [Going to Production](#12-going-to-production)
-13. [External Services Reference](#13-external-services-reference)
+   - 8.4 [API Client — lib/api.ts](#84-api-client)
+   - 8.5 [Socket Client — lib/socket.ts](#85-socket-client)
+   - 8.6 [Every Page Explained](#86-every-page)
+   - 8.7 [React Hooks Rules You Must Know](#87-react-hooks-rules)
+   - 8.8 [Tailwind CSS and shadcn/ui](#88-tailwind-and-shadcn)
+9. [Complete End-to-End Flows](#9-end-to-end-flows)
+10. [How to Make Common Changes](#10-how-to-make-changes)
+11. [Admin Panel — Full Guide](#11-admin-panel)
+12. [Hosting and Deployment](#12-hosting-and-deployment)
+13. [Daily Operations on a Live Server](#13-daily-operations)
+14. [Debugging Common Problems](#14-debugging)
+15. [Security — What We Do and Why](#15-security)
+16. [Quick Reference Card](#16-quick-reference)
 
 ---
 
-## 1. What is HomeHero?
+## 1. What Is HomeHero?
 
-An on-demand household services marketplace. Customers book trained, background-verified household helpers ("Experts") for tasks like cleaning, dishwashing, laundry, and cooking. Experts are matched in real time and tracked live on a map.
+HomeHero is an **on-demand home services marketplace** — similar to UrbanClap or Snabbit. A customer opens the app, picks a service (cleaning, cooking, laundry), pays, and a trained verified worker ("Expert") shows up at their door. The customer can track the expert live on a map.
 
-**Three user roles:**
+### Three types of users
 
-| Role | Can do |
-|---|---|
-| `CUSTOMER` | Browse services, book, track, review, manage wallet |
-| `EXPERT` | Accept jobs, advance booking status, manage earnings/withdrawals, upload KYC docs |
-| `ADMIN` / `SUPER_ADMIN` | Full CMS, user management, KYC review, coupon management, support, analytics |
+| Role | What they can do |
+|------|-----------------|
+| **CUSTOMER** | Browse services, book, pay (cash / wallet / card), track expert on live map, review, manage wallet |
+| **EXPERT** | Go online/offline, accept jobs, advance booking status, upload ID documents, withdraw earnings |
+| **ADMIN / SUPER_ADMIN** | Manage everything: verify experts, handle support, configure payment gateways, run analytics, manage CMS |
 
----
-
-## 2. Tech Stack
-
-| Layer | Technology |
-|---|---|
-| Frontend | React 19, TanStack Start (SSR), TanStack Router, TanStack Query, Tailwind CSS, shadcn/ui |
-| Backend | Node.js 20+ ESM, Express.js |
-| Database | MySQL 8 via Prisma ORM (v5) + mysql2 driver |
-| Realtime | Socket.IO (+ Redis adapter for multi-instance) |
-| Queue | BullMQ + Redis (falls back to in-process `setTimeout`) |
-| Auth | JWT access token (15 min) + opaque refresh token (30 days, stored in DB) |
-| Payments | Razorpay + Stripe (DB-configurable from Admin panel; auto-mocked when keys absent) |
-| File storage | Local disk `backend/uploads/` in dev; swap `storageProvider.js` for S3 in prod |
-| SMS OTP | MSG91 (primary) / Twilio (fallback) — both auto-mocked when keys absent |
-| Push | Firebase Cloud Messaging — auto-mocked when key absent |
-| Caching | Redis (shared) or in-memory Map with TTL |
-
----
-
-## 3. Repository Layout
+### How the money flows
 
 ```
-homehero-spark/
-├── backend/
-│   ├── server/                   ← The monolith (port 4001)
-│   │   ├── api.js                ← Express app entry: middleware + route mounting
-│   │   ├── prisma.js             ← Prisma client singleton (shared across the app)
-│   │   ├── migrate.js            ← Redirect stub — use `npm run db:migrate` instead
-│   │   ├── seed.js               ← Demo data seed (run once after migrate)
-│   │   ├── auth/
-│   │   │   └── tokens.js         ← JWT sign/verify + refresh token helpers
-│   │   ├── controllers/          ← Request handlers (one file per domain)
-│   │   ├── middleware/           ← auth, cors, rateLimit, cache, sanitize, errorHandler
-│   │   ├── models/               ← DB query functions (Prisma ORM + $queryRaw for joins)
-│   │   ├── providers/            ← External service adapters (payment, sms, storage, fcm)
-│   │   ├── queues/               ← dispatchQueue.js (BullMQ or in-process setTimeout)
-│   │   ├── realtime/             ← io.js — Socket.IO server + room management
-│   │   ├── routes/               ← Express routers (one file per domain)
-│   │   └── services/             ← Business logic: dispatchService, notificationService, auditService
-│   ├── services/                 ← Optional microservices (thin proxies; gateway routes to these)
-│   │   ├── gateway/              ← API gateway (port 4000)
-│   │   ├── auth-service/         ← Standalone auth (port 4101)
-│   │   ├── payment-service/      ← Standalone payment (port 4102)
-│   │   └── booking-service/      ← Standalone booking (port 4103)
-│   ├── prisma/
-│   │   └── schema.prisma         ← Prisma schema — all tables, enums, and column types
-│   └── scripts/
-│       └── load-test.js          ← k6 load test (requires k6 installed)
-│
-├── frontend/
-│   └── src/
-│       ├── routes/               ← Every file = one page (TanStack file-based routing)
-│       ├── components/
-│       │   ├── layout/           ← Navbar, Footer, NotificationBell
-│       │   ├── home/             ← BannerSlider (hero carousel)
-│       │   ├── booking/          ← BookingTracker, LiveMap
-│       │   ├── expert/           ← ExpertCard
-│       │   ├── shared/           ← Avatar, EmptyState, LoadingSpinner, StarRating, StatusBadge
-│       │   └── ui/               ← shadcn/ui primitives (Button, Input, Dialog, etc.)
-│       ├── lib/
-│       │   ├── api.ts            ← fetch wrapper, token management, uploadFile()
-│       │   ├── auth-context.tsx  ← React context that parses the JWT from localStorage
-│       │   ├── socket.ts         ← Lazy Socket.IO client singleton
-│       │   ├── icons.ts          ← serviceIcon() maps icon_name strings to Lucide icons
-│       │   └── utils.ts          ← cn() Tailwind class merge helper
-│       └── styles.css            ← Tailwind base + CSS design tokens (colors, radius)
-│
-└── docs/
-    ├── DEVELOPER.md              ← This file
-    ├── DEPLOYMENT.md             ← Production deployment guide
-    ├── ADMIN_GUIDE.md            ← How to use the admin panel
-    └── STATUS.md                 ← Current feature status and known gaps
+Customer pays ₹1000
+  ├── Platform fee (e.g. 15%) = ₹150  → HomeHero keeps this
+  └── Expert amount (85%)    = ₹850  → Expert's wallet (withdrawable)
 ```
 
 ---
 
-## 4. Running Locally
+## 2. Technology Stack
+
+This section explains every technology, what it is, and exactly why we chose it.
+
+---
+
+### Node.js — The Backend Runtime
+
+**What it is:** Node.js lets you run JavaScript on a server (not just in a browser). It is built on Chrome's V8 engine.
+
+**Why we use it:** Our team knows JavaScript. Node is very fast for I/O-heavy work (reading DB, calling APIs) because it is non-blocking — while waiting for a database response it handles other requests instead of sitting idle.
+
+**Key concept — async/await:** Almost every function in the backend is `async`. This means it returns a Promise. `await` pauses inside an async function until the Promise resolves.
+
+```js
+// Old style (callback hell) — don't do this:
+db.query('SELECT * FROM users WHERE id = ?', [id], function(err, rows) {
+  if (err) handleError(err);
+  doSomethingWith(rows[0]);
+});
+
+// Modern async/await (what we use — clean and readable):
+const user = await prisma.users.findUnique({ where: { id } });
+doSomethingWith(user);
+```
+
+---
+
+### Express.js — The Web Framework
+
+**What it is:** Express is a minimal HTTP framework for Node.js. It handles requests and lets you define routes and middleware.
+
+**Why we use it:** Most widely used Node.js framework. Simple, well-documented, huge ecosystem.
+
+**How it works:**
+```js
+import express from 'express';
+const app = express();
+
+app.get('/hello', (req, res) => {
+  res.json({ message: 'Hello World' });
+});
+
+app.listen(4001, () => console.log('Server running on :4001'));
+```
+
+**In our project (`backend/server/api.js`):**
+```js
+const app = express();
+app.use(express.json());           // parse JSON request bodies
+app.use(corsMiddleware);           // handle CORS
+app.use('/api/v1/auth',     authRouter);
+app.use('/api/v1/bookings', bookingRouter);
+app.use('/api/v1/admin',    adminRouter);
+app.use(errorHandler);             // MUST be last
+app.listen(4001);
+```
+
+---
+
+### MySQL 8 — The Database
+
+**What it is:** MySQL is a relational database. Data is stored in tables with rows and columns — like spreadsheets that can link to each other.
+
+**Why we use it (and not MongoDB):** HomeHero has complex relationships — a booking links a customer, expert, service, payment, and status events. Relational databases handle these JOIN queries efficiently and guarantee data consistency with ACID transactions (debit wallet + create booking = both succeed or both rollback).
+
+---
+
+### Prisma — The ORM (Object-Relational Mapper)
+
+**What it is:** Prisma sits between Node.js code and MySQL. Instead of writing raw SQL, you write JavaScript objects and Prisma translates them.
+
+**Why we use it:**
+- Type-safe queries — TypeScript knows what columns exist
+- Schema-as-code in `backend/prisma/schema.prisma`
+- Easy migration with `prisma db push`
+
+**How it works:**
+```js
+import prisma from '../prisma.js';
+
+// SELECT * FROM users WHERE email = 'x@y.com'
+const user = await prisma.users.findUnique({ where: { email: 'x@y.com' } });
+
+// INSERT INTO bookings (...)
+const booking = await prisma.bookings.create({
+  data: { customer_id: '123', service_id: '456', status: 'SEARCHING' }
+});
+
+// UPDATE experts SET status = 'ONLINE' WHERE id = '789'
+await prisma.experts.update({ where: { id: '789' }, data: { status: 'ONLINE' } });
+```
+
+**Complex JOINs** — for queries joining 4-5 tables we use raw SQL via `$queryRaw`:
+```js
+// Prisma.sql prevents SQL injection — values are parameterised, not concatenated
+const rows = await prisma.$queryRaw`
+  SELECT b.*, cust.name AS customer_name, ep.name AS expert_name
+  FROM bookings b
+  LEFT JOIN profiles cust ON cust.id = b.customer_id
+  LEFT JOIN profiles ep   ON ep.id   = b.expert_id
+  WHERE b.id = ${bookingId}
+`;
+```
+
+---
+
+### Socket.IO — Real-Time Communication
+
+**What it is:** Socket.IO enables two-way real-time communication. Unlike regular HTTP (browser asks → server answers → connection closes), Socket.IO keeps the connection open so the server can push data at any time.
+
+**Why we use it:**
+- Expert GPS location must update on the customer's map every 10 seconds
+- "Expert is on the way!" must appear instantly without the customer refreshing
+- Admin alarm rings when a booking has no expert
+
+**Mental model:**
+```
+Browser opens Socket.IO connection
+          ↕  (connection stays open)
+Server can push events to browser anytime
+Browser can also send events to server anytime
+
+// Server emits:
+io.to(`booking:bk-123`).emit('booking_assigned', { expert: 'Ravi' })
+
+// Browser receives:
+socket.on('booking_assigned', (data) => showToast(`${data.expert} assigned!`))
+```
+
+---
+
+### JWT — Authentication Tokens
+
+**What it is:** A JWT (JSON Web Token) is a compact, cryptographically signed token that proves who you are. It has three parts separated by dots: `header.payload.signature`. The payload carries `{ user_id, email, role }`.
+
+**Why two tokens (access + refresh)?** The access token is short-lived (15 min) — if stolen, it expires quickly. The refresh token is long-lived (30 days) but stored in the database, so we can revoke it instantly.
+
+```
+LOGIN → { accessToken (15min JWT), refreshToken (30day random string in DB) }
+
+Every API request:
+  Authorization: Bearer <accessToken>
+  → server verifies signature → extracts { user_id, role } → allow
+
+When access token expires (401):
+  POST /auth/refresh { refreshToken }
+  → server checks DB hash → issues new pair
+  → frontend retries the original request transparently
+```
+
+---
+
+### React 19 — The Frontend UI Library
+
+**What it is:** React is a JavaScript library for building UIs. Instead of manually updating HTML when data changes, you describe what the UI *should look like* and React figures out what to update.
+
+**Key concept — components:** Everything is a function returning JSX:
+```tsx
+function BookingCard({ booking }) {
+  return (
+    <div className="rounded-xl border p-4">
+      <h3>{booking.service_name}</h3>
+      <p>Status: {booking.status}</p>
+    </div>
+  );
+}
+```
+
+**Key concept — state:** When state changes, React re-renders:
+```tsx
+const [count, setCount] = useState(0);
+<button onClick={() => setCount(count + 1)}>Clicked {count} times</button>
+```
+
+---
+
+### TanStack Router — URL Routing
+
+**What it is:** Maps URLs to components. Every file in `src/routes/` automatically becomes a URL.
+
+`book.$serviceId.tsx` → `/book/:serviceId`
+`admin.index.tsx` → `/admin`
+
+No manual route registration needed.
+
+---
+
+### TanStack Query — Server Data Fetching
+
+**What it is:** Manages fetching, caching, and syncing server data in React.
+
+**Why not `useEffect + fetch`?** Loading states, error states, caching, refetching — all handled automatically.
+
+```tsx
+// With TanStack Query (clean):
+const { data, isLoading } = useQuery({
+  queryKey: ['bookings'],
+  queryFn: () => apiFetch('/bookings'),
+});
+```
+
+---
+
+### Tailwind CSS — Styling
+
+**What it is:** Utility-first CSS framework. Apply small classes directly in JSX instead of writing CSS files.
+
+```tsx
+// Instead of: .card { border-radius: 12px; padding: 16px; border: 1px solid #e5; }
+<div className="rounded-xl p-4 border">...</div>
+```
+
+---
+
+### shadcn/ui — UI Components
+
+**What it is:** Pre-built accessible React components (Button, Dialog, Input) using Tailwind. You own the source code in `frontend/src/components/ui/` — fully customizable.
+
+---
+
+### BullMQ — Background Job Queue
+
+**What it is:** Runs tasks in the background. When a booking is created and no expert is available, we enqueue a retry job and return the HTTP response immediately — no waiting.
+
+**Where:** `backend/server/queues/dispatchQueue.js`. Falls back to `setTimeout` if Redis is unavailable.
+
+---
+
+## 3. First-Time Local Setup
 
 ### Prerequisites
-- Node.js 20+
-- MySQL 8 running locally (or via Docker)
-- Redis 7 (optional — needed for BullMQ, multi-instance Socket.IO, and shared caching)
-
-### Steps
 
 ```bash
-# 1. Install all dependencies
-cd backend && npm install
-cd ../frontend && npm install
-
-# 2. Configure environment
-cp backend/.env.example backend/.env
-# Edit backend/.env — set DATABASE_URL=mysql://user:pass@127.0.0.1:3306/homehero
-
-# 3. Create the DB and apply schema
-mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS homehero"
-cd backend && npm run db:migrate && cd ..
-
-# 4. Seed demo data (services, cities, demo accounts)
-node backend/server/seed.js
-
-# 5. Start everything
-# Option A — from repo root:
-npm run dev
-# Option B — manually:
-node backend/server/api.js &
-cd frontend && npm run dev
+node --version    # need v20+
+mysql --version   # need 8.x
 ```
 
-**Demo accounts (password: `Demo@1234`):**
-| Role | Email |
-|---|---|
-| Customer | `customer@homehero.test` |
-| Expert | `e1@snabbit.test` through `e5@snabbit.test` |
+**Install Node.js 20 on Ubuntu:**
+```bash
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+source ~/.bashrc
+nvm install 20 && nvm use 20
+```
+
+**Install MySQL on Ubuntu:**
+```bash
+sudo apt update && sudo apt install mysql-server -y
+sudo systemctl start mysql && sudo systemctl enable mysql
+sudo mysql_secure_installation
+```
+
+**Install Redis (optional but recommended):**
+```bash
+sudo apt install redis-server -y
+sudo systemctl start redis-server
+redis-cli ping   # should print: PONG
+```
+
+### Step-by-step setup
+
+```bash
+# 1. Enter the project
+cd /var/www/html/Urban-Service/homehero-spark
+
+# 2. Install all dependencies (backend + frontend together)
+npm run install:all
+
+# 3. Create the MySQL database
+mysql -u root -p -e "CREATE DATABASE homehero CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+
+# 4. Configure environment
+cp backend/.env.example backend/.env
+nano backend/.env
+# Set at minimum:
+#   DATABASE_URL=mysql://root:YOUR_PASSWORD@127.0.0.1:3306/homehero
+#   JWT_SECRET=any-string-32-chars-or-longer
+
+# 5. Create all database tables
+npm run db:migrate
+
+# 6. Seed demo data
+npm run db:seed
+
+# 7. Start everything
+npm run dev:all
+```
+
+Open **http://localhost:8080**
+
+### Demo accounts (password: `Password123`)
+
+| Account | Email |
+|---------|-------|
+| Customer | `customer@snabbit.test` |
+| Expert | `e1@snabbit.test` |
 | Admin | `admin@homehero.test` |
 | Super Admin | `superadmin@homehero.test` |
 
-### Restarting services safely
-
-`pkill -f "server/api.js"` will kill itself — the pattern matches the shell command's own argument list. Always restart by PID:
+### Start/stop services
 
 ```bash
-# Find the PID listening on port 4001 and kill it cleanly
+npm run dev:backend      # API only (:4001)
+npm run dev:frontend     # Frontend only (:8080)
+
+# Kill monolith safely (never use pkill -f):
 kill $(lsof -ti tcp:4001 -sTCP:LISTEN)
 
-# Restart in background
+# Restart in background:
 nohup node backend/server/api.js > /tmp/monolith.log 2>&1 & disown
+tail -f /tmp/monolith.log
+```
+
+---
+
+## 4. Project Folder Structure
+
+```
+homehero-spark/
+├── package.json              ← Root scripts: dev:all, db:migrate, build
+├── docker-compose.yml        ← Docker deployment
+│
+├── backend/
+│   ├── prisma/
+│   │   └── schema.prisma     ← ★ THE DATABASE SCHEMA — edit this to change tables
+│   │
+│   └── server/               ← The monolith (port 4001)
+│       ├── api.js            ← Express app: middleware chain + route mounts
+│       ├── prisma.js         ← Prisma client singleton — import for all DB access
+│       ├── errors.js         ← BadRequest(), NotFound(), Forbidden()
+│       ├── utils.js          ← asyncHandler() and small helpers
+│       ├── seed.js           ← Demo data
+│       │
+│       ├── auth/
+│       │   └── tokens.js     ← JWT sign/verify, refresh token helpers
+│       │
+│       ├── controllers/      ← What happens when a route is hit
+│       │   ├── authController.js
+│       │   ├── bookingController.js  ← most complex
+│       │   ├── expertController.js
+│       │   ├── paymentController.js
+│       │   ├── adminController.js
+│       │   ├── walletController.js
+│       │   ├── serviceController.js
+│       │   ├── couponController.js
+│       │   ├── notificationController.js
+│       │   ├── supportController.js
+│       │   ├── cmsController.js
+│       │   └── reviewController.js
+│       │
+│       ├── middleware/       ← Functions that run before controllers
+│       │   ├── auth.js       ← Verify JWT, check roles
+│       │   ├── rateLimit.js  ← Prevent abuse
+│       │   ├── cors.js       ← Allow/block cross-origin requests
+│       │   ├── sanitize.js   ← Strip HTML from inputs (XSS prevention)
+│       │   ├── cache.js      ← Cache GET responses
+│       │   └── errorHandler.js ← Catch all errors, return clean JSON
+│       │
+│       ├── models/           ← Database query functions (called by controllers)
+│       │   ├── BookingModel.js    ← most complex: JOINs across 5+ tables
+│       │   ├── ExpertModel.js
+│       │   ├── UserModel.js
+│       │   ├── WalletModel.js
+│       │   ├── PaymentModel.js
+│       │   └── NotificationModel.js
+│       │
+│       ├── providers/        ← External services with mock fallback
+│       │   ├── paymentProvider.js ← Razorpay + Stripe; DB-backed config
+│       │   ├── smsProvider.js    ← MSG91 / Twilio OTP
+│       │   ├── storageProvider.js ← Local disk → S3 swap point
+│       │   └── fcmProvider.js    ← Firebase push notifications
+│       │
+│       ├── queues/
+│       │   └── dispatchQueue.js  ← BullMQ or setTimeout retry queue
+│       │
+│       ├── realtime/
+│       │   └── io.js            ← Socket.IO server
+│       │
+│       ├── routes/           ← URL definitions
+│       │   ├── auth.js
+│       │   ├── bookings.js
+│       │   ├── experts.js
+│       │   ├── payments.js
+│       │   ├── services.js
+│       │   ├── admin.js
+│       │   ├── wallet.js
+│       │   ├── notifications.js
+│       │   ├── support.js
+│       │   ├── cms.js
+│       │   ├── reviews.js
+│       │   └── uploads.js
+│       │
+│       └── services/         ← Business logic not tied to HTTP
+│           ├── dispatchService.js     ← Expert matching algorithm
+│           ├── notificationService.js ← DB insert + socket emit together
+│           └── auditService.js        ← Log admin actions
+│
+├── frontend/
+│   └── src/
+│       ├── routes/           ← One file = one URL (file-based routing)
+│       │   ├── __root.tsx    ← Root layout: Navbar, Footer, wraps ALL pages
+│       │   ├── index.tsx     ← /
+│       │   ├── auth.login.tsx
+│       │   ├── auth.signup-customer.tsx
+│       │   ├── auth.signup-expert.tsx    ← 3-step wizard
+│       │   ├── book.$serviceId.tsx       ← /book/:serviceId
+│       │   ├── bookings.tsx
+│       │   ├── track.$bookingId.tsx      ← /track/:id (live map)
+│       │   ├── expert.index.tsx          ← /expert (dashboard)
+│       │   ├── wallet.tsx
+│       │   ├── account.tsx
+│       │   ├── support.tsx
+│       │   ├── notifications.tsx
+│       │   └── admin.index.tsx           ← /admin (entire admin panel)
+│       │
+│       ├── components/
+│       │   ├── layout/       ← Navbar, Footer, NotificationBell
+│       │   ├── booking/      ← BookingTracker, LiveMap
+│       │   ├── shared/       ← Avatar, LoadingSpinner, StatusBadge
+│       │   └── ui/           ← shadcn/ui: Button, Input, Dialog...
+│       │
+│       └── lib/
+│           ├── api.ts         ← apiFetch() — every API call goes here
+│           ├── auth-context.tsx ← useAuth() — who is logged in
+│           ├── socket.ts      ← getSocket() — Socket.IO connection
+│           ├── sound.ts       ← Web Audio API notification sounds
+│           ├── icons.ts       ← DB icon names → Lucide React components
+│           └── utils.ts       ← cn() Tailwind class merge helper
+│
+├── docs/                     ← Documentation
+└── deploy/                   ← nginx.conf, PM2 config, Caddyfile
 ```
 
 ---
 
 ## 5. Environment Variables
 
-All variables live in `backend/.env`. The app runs without most of them — providers fall back silently to mock mode.
+All config for the backend lives in `backend/.env`.
 
-| Variable | Default | Notes |
-|---|---|---|
-| `DATABASE_URL` | _(required)_ | Full Prisma connection string: `mysql://user:pass@127.0.0.1:3306/homehero` |
-| `JWT_SECRET` | `dev-secret` | **Must be 32+ random chars in production.** Generate: `openssl rand -hex 32` |
-| `API_PORT` | `4001` | Monolith port |
-| `GATEWAY_PORT` | `4000` | Gateway port (only needed if running the gateway) |
-| `ALLOWED_ORIGINS` | `http://localhost:8080` | CORS — set to your frontend domain(s) in prod |
-| `NODE_ENV` | _(unset)_ | Set to `production` to enforce JWT strength + strict CORS |
-| `REDIS_URL` | _(unset)_ | Enables BullMQ, Socket.IO Redis adapter, shared caching |
-| `RAZORPAY_KEY_ID` | _(unset)_ | Razorpay env-var fallback (superseded by DB settings; see §6.8) |
-| `RAZORPAY_KEY_SECRET` | _(unset)_ | Razorpay env-var fallback |
-| `STRIPE_TEST_SECRET_KEY` | _(unset)_ | Stripe env-var fallback (superseded by DB settings) |
-| `STRIPE_TEST_PUBLISHABLE_KEY` | _(unset)_ | Stripe env-var fallback |
-| `STRIPE_LIVE_SECRET_KEY` | _(unset)_ | Stripe env-var fallback |
-| `STRIPE_LIVE_PUBLISHABLE_KEY` | _(unset)_ | Stripe env-var fallback |
-| `PAYMENT_GATEWAY` | `RAZORPAY` | Env-var fallback when DB setting `payment_gateway` is not set |
-| `PAYMENT_MODE` | `TEST` | Env-var fallback when DB setting `payment_mode` is not set |
-| `FRONTEND_URL` | `http://localhost:5173` | Used by Stripe to build redirect success/cancel URLs |
-| `MSG91_AUTH_KEY` | _(unset)_ | SMS OTP — mocked (console.log) without this |
-| `FIREBASE_SERVICE_ACCOUNT` | _(unset)_ | Push notifications — mocked without this |
-| `PUBLIC_BACKEND_URL` | _(unset)_ | Base URL for uploaded file links. Set to `https://api.yourdomain.com` in prod |
-| `TRUST_PROXY` | `1` | Proxy hops to trust for real client IP (rate limiting) |
-| `RATE_LIMIT_API` | `300` | Requests/minute/IP across the whole API |
-| `RATE_LIMIT_AUTH` | `20` | Login/signup attempts per 15 min/IP |
-| `RATE_LIMIT_OTP` | `5` | OTP requests per 15 min per IP+phone composite key |
-| `JSON_BODY_LIMIT` | `1mb` | Max request body size |
+### Required to run locally
+
+| Variable | Example | Purpose |
+|----------|---------|---------|
+| `DATABASE_URL` | `mysql://root:pass@127.0.0.1:3306/homehero` | How Prisma connects to MySQL |
+| `JWT_SECRET` | any 32+ character string | Signs JWT tokens. Changing it logs everyone out |
+
+### Security (important in production)
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `NODE_ENV` | unset | Set to `production` for strict mode |
+| `ALLOWED_ORIGINS` | `http://localhost:8080` | Which frontends can call the API. **Set to your domain in production** |
+| `PUBLIC_BACKEND_URL` | unset | Base URL for uploaded file links. Set to `https://api.yourdomain.com` |
+| `FRONTEND_URL` | `http://localhost:5173` | Used by Stripe to build redirect URLs |
+| `TRUST_PROXY` | `1` | Trust nginx X-Forwarded-For header (for correct rate limiting) |
+
+### Rate limiting (optional, defaults work)
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `RATE_LIMIT_API` | `300` | Requests per minute per IP |
+| `RATE_LIMIT_AUTH` | `20` | Login attempts per 15min per IP |
+| `RATE_LIMIT_OTP` | `5` | OTP requests per 15min per IP+phone |
+
+### Payment keys (optional — mocked when absent)
+
+> Prefer Admin Panel → Settings → Payment Gateway over env vars. DB settings override env vars.
+
+| Variable | Purpose |
+|----------|---------|
+| `RAZORPAY_KEY_ID` + `RAZORPAY_KEY_SECRET` | Razorpay credentials |
+| `STRIPE_TEST_SECRET_KEY` + `STRIPE_TEST_PUBLISHABLE_KEY` | Stripe test |
+| `STRIPE_LIVE_SECRET_KEY` + `STRIPE_LIVE_PUBLISHABLE_KEY` | Stripe live |
+| `PAYMENT_GATEWAY` | `RAZORPAY` or `STRIPE` |
+| `PAYMENT_MODE` | `TEST` or `LIVE` |
+
+### External services (all optional — logged/mocked when absent)
+
+| Variable | Service | Without it |
+|----------|---------|-----------|
+| `REDIS_URL` | Redis | In-memory queue + cache, single-instance Socket.IO |
+| `MSG91_AUTH_KEY` etc. | SMS OTP | OTP printed to console.log |
+| `FIREBASE_SERVICE_ACCOUNT` | Push notifications | Logs to console.log |
 
 ---
 
-## 6. Backend Architecture
+## 6. Backend — How It Works
 
-### 6.1 Monolith vs Microservices
+### 6.1 Express.js
 
-In development, **only the monolith (port 4001) needs to run** — it handles everything including auth, payments, bookings, realtime, and file uploads.
+**File: `backend/server/api.js`**
 
-The gateway and microservices are optional and designed for incremental production extraction. The microservice files (`services/auth-service/server.js` etc.) simply import the same route files from the monolith, so they always stay in sync without code duplication.
-
-```
-Development:
-  Frontend :8080  →  Monolith :4001
-
-Production option (with gateway):
-  Frontend  →  Gateway :4000
-                ├── /api/v1/auth, /me              → auth-service :4101
-                ├── /api/v1/payments, /wallet       → payment-service :4102
-                ├── /api/v1/bookings, /reviews      → booking-service :4103
-                └── everything else + WebSocket    → monolith :4001
-```
-
-### 6.2 API Gateway
-
-File: `backend/services/gateway/server.js`
-
-- Adds `helmet()` and sets `trust proxy` at the public edge
-- Each route in the `ROUTES` array is proxied with `xfwd: true` — this forwards `X-Forwarded-For` so downstream services see the real client IP (needed for per-IP rate limiting to work correctly)
-- The fallback proxy passes WebSocket upgrades (`ws: true`), keeping Socket.IO working through the gateway
-
-### 6.3 Request Lifecycle
-
-Every HTTP request through the monolith passes this middleware chain in order:
-
-```
-1.  helmet()            → 15+ security response headers (CSP, HSTS, X-Frame-Options…)
-2.  compression()       → gzip / brotli compression (negotiated via Accept-Encoding)
-3.  corsMiddleware      → validates Origin against ALLOWED_ORIGINS; blocks in production
-4.  express.json()      → parse JSON body (1MB limit)
-5.  sanitizeBody        → recursively strips HTML tags from all string values (XSS guard)
-                         ↓
-6.  GET /health         → exits here (exempt from rate limiting — for load-balancer probes)
-7.  GET /uploads/*      → static file server for local KYC uploads
-                         ↓
-8.  apiLimiter          → 300 req/min/IP rate limit applied to entire /api/v1 tree
-                         ↓
-9.  route handlers      → authMiddleware → controller → model → DB response
-                         ↓
-10. errorHandler        → catches any thrown error, formats as { error, message } JSON
-```
-
-### 6.4 Auth — JWT + Refresh Tokens
-
-**Access token** — JWT signed with `JWT_SECRET`. Expires in 15 minutes. Payload: `{ user_id, email, role }`.
-
-**Refresh token** — Random 96-character hex string (deliberately NOT a JWT, so it can never be used as an access token). Stored as `SHA-256(token)` in the `refresh_tokens` table. Expires after 30 days.
-
-**Login flow:**
-```
-POST /auth/login  →  { accessToken, refreshToken }
-
-Every API call:
-  Authorization: Bearer <accessToken>
-  → authMiddleware verifies JWT → sets req.user = { id, email, role }
-
-When access token expires (server returns 401):
-  POST /auth/refresh  { refresh_token }
-  → server: verifies hash matches DB, token not expired
-  → rotates to a new pair (old refresh token deleted)
-  → returns { accessToken, refreshToken }
-```
-
-**Frontend storage:** `localStorage` keys `homehero_token` and `homehero_refresh`. A custom `homehero-auth-changed` window event tells `AuthContext` to re-parse the token whenever `setTokens()` or `clearTokens()` is called (from `lib/api.ts`).
-
-**Key files:**
-- `backend/server/auth/tokens.js` — sign / generate / hash helpers
-- `backend/server/middleware/auth.js` — `authMiddleware`, `requireRole()`, `isAdmin()`
-- `backend/server/routes/auth.js` — all auth endpoints
-- `frontend/src/lib/api.ts` — transparent 401 retry with token refresh
-- `frontend/src/lib/auth-context.tsx` — React auth state
-
-### 6.5 Database Layer — Models
-
-Every model file in `backend/server/models/` exports an object of async functions backed by **Prisma ORM v5**. The shared Prisma client is the singleton exported from `prisma.js`. Simple CRUD uses Prisma's typed API; complex multi-table JOINs use `prisma.$queryRaw` with `Prisma.sql` tagged template literals (SQL-injection-safe parameterised queries).
+This is the entry point. It creates the Express app, applies middleware, mounts routes, and starts the server.
 
 ```js
-// Standard pattern
+import express from 'express';
+import { createServer } from 'http';
+import { setupSocket } from './realtime/io.js';
+
+const app = express();
+const httpServer = createServer(app);  // Wrap Express in HTTP server for Socket.IO
+
+// Global middleware — runs on EVERY request, in this order:
+app.use(helmet());           // Security headers
+app.use(compression());      // gzip/brotli response compression
+app.use(corsMiddleware);      // CORS validation
+app.use(express.json());      // Parse JSON request bodies
+app.use(sanitizeBody);        // Strip HTML from all inputs
+
+// Health check (no rate limit — for load balancers)
+app.get('/api/v1/health', (req, res) => res.json({ status: 'ok' }));
+
+// Static file serving for uploads
+app.use('/uploads', express.static('uploads'));
+
+// Rate limiting — applied to all /api/v1 routes
+app.use('/api/v1', apiLimiter);
+
+// Routes
+app.use('/api/v1/auth',          authRouter);
+app.use('/api/v1/bookings',      bookingRouter);
+app.use('/api/v1/payments',      paymentRouter);
+app.use('/api/v1/admin',         adminRouter);
+// ... more routes
+
+// Error handler — MUST be last
+app.use(errorHandler);
+
+// Start Socket.IO on the same server (same port — no extra port)
+setupSocket(httpServer);
+
+httpServer.listen(4001);
+```
+
+### 6.2 Request Lifecycle
+
+Every request passes through these layers in order:
+
+```
+POST /api/v1/bookings  (with Authorization: Bearer TOKEN)
+       │
+   helmet()     → adds 15 security response headers
+       │
+   compression() → will compress the response with gzip
+       │
+   cors()        → is this origin in ALLOWED_ORIGINS? Yes → continue
+       │
+   express.json() → parses { "service_id": "abc" } from request body
+       │
+   sanitize()    → strips any <script> tags from the body
+       │
+   apiLimiter    → is this IP under 300 req/min? Yes → continue
+       │
+   authMiddleware → verifies Bearer JWT → sets req.user = { id, role }
+       │
+   bookingController.create()  → validates inputs, creates booking
+       │
+   BookingModel.create()       → INSERT INTO bookings ...
+       │
+   res.json({ id: "bk-123" })  → sends response
+       │
+   (if anything threw above) → errorHandler → { error, message } JSON
+```
+
+### 6.3 Authentication
+
+**Files:** `backend/server/auth/tokens.js`, `backend/server/middleware/auth.js`
+
+#### Login flow step by step
+
+**1. User POSTs credentials:**
+```
+POST /api/v1/auth/login
+Body: { "email": "customer@snabbit.test", "password": "Password123" }
+```
+
+**2. Backend verifies password (bcrypt):**
+```js
+// authController.js
+const user = await UserModel.findByEmail(email);
+const valid = await bcrypt.compare(password, user.password_hash);
+// bcrypt.compare handles the salt automatically — plain text never stored
+if (!valid) throw BadRequest('INVALID_CREDENTIALS', 'Wrong email or password');
+```
+
+**3. Backend creates the token pair:**
+```js
+// tokens.js
+// Access token: JWT, expires in 15 minutes
+const accessToken = jwt.sign(
+  { user_id: user.id, email: user.email, role: user.role },
+  process.env.JWT_SECRET,
+  { expiresIn: '15m' }
+);
+
+// Refresh token: random 96-char hex string (NOT a JWT — so it can't be misused as one)
+const refreshToken = crypto.randomBytes(48).toString('hex');
+
+// Store HASH of refresh token in DB (so a leaked DB doesn't expose tokens)
+const hash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+await prisma.refresh_tokens.create({
+  data: { user_id: user.id, token_hash: hash, expires_at: thirtyDaysFromNow }
+});
+```
+
+**4. Frontend stores tokens and uses them:**
+```ts
+// api.ts — after login:
+localStorage.setItem('homehero_token', accessToken);
+localStorage.setItem('homehero_refresh', refreshToken);
+
+// Every apiFetch call adds:
+headers: { 'Authorization': `Bearer ${accessToken}` }
+```
+
+**5. Backend checks on every protected request:**
+```js
+// middleware/auth.js
+export async function authMiddleware(req, res, next) {
+  const token = req.headers.authorization?.split(' ')[1]; // "Bearer TOKEN" → "TOKEN"
+  if (!token) throw Forbidden();
+  
+  const payload = jwt.verify(token, process.env.JWT_SECRET);
+  // jwt.verify throws if token is invalid or expired
+  
+  req.user = { id: payload.user_id, email: payload.email, role: payload.role };
+  next(); // pass to the controller
+}
+```
+
+**6. Role guards on admin routes:**
+```js
+// middleware/auth.js
+export const requireRole = (...roles) => (req, res, next) => {
+  if (!roles.includes(req.user.role)) throw Forbidden();
+  next();
+};
+
+// Usage in routes/admin.js:
+router.get('/overview',
+  authMiddleware,                         // must be logged in
+  requireRole('ADMIN', 'SUPER_ADMIN'),    // must have one of these roles
+  asyncHandler(getOverview)
+);
+
+// Inside controllers — check admin for bypassing ownership rules:
+export function isAdmin(user) {
+  return user.role === 'ADMIN' || user.role === 'SUPER_ADMIN';
+}
+```
+
+### 6.4 Database
+
+**The schema file: `backend/prisma/schema.prisma`**
+
+Every table is defined as a Prisma `model`. Example:
+```prisma
+model bookings {
+  id             String   @id @default(uuid())
+  customer_id    String
+  expert_id      String?                       // ? = nullable
+  service_id     String
+  status         String   @default("SEARCHING")
+  total_amount   Decimal
+  payment_method String   @default("CASH")
+  created_at     DateTime @default(now())
+}
+```
+
+**Changing the schema:**
+```bash
+# 1. Edit backend/prisma/schema.prisma
+# 2. Apply to MySQL:
+cd backend && npm run db:migrate
+# = prisma db push = sends ALTER TABLE / CREATE TABLE to MySQL
+```
+
+**The Model pattern — Controllers call Models, Models call Prisma:**
+```
+bookingController.create()
+    └── BookingModel.create(data)
+            └── prisma.bookings.create({ data })
+                    └── INSERT INTO bookings ...
+```
+
+**Example model file:**
+```js
+// models/BookingModel.js
 import prisma from '../prisma.js';
 import { Prisma } from '@prisma/client';
 
-export const ExampleModel = {
-  async findById(id) {
-    return prisma.example.findUnique({ where: { id } });
-  },
+export const BookingModel = {
 
-  // The optional `tx` parameter lets callers inject a transaction client
+  // Simple create
   async create(data, tx = prisma) {
-    return tx.example.create({ data });
+    // tx = transaction client (optional — defaults to global prisma)
+    return tx.bookings.create({ data });
   },
 
-  // Multi-table JOIN — use $queryRaw with Prisma.sql for safe parameterisation
-  async findWithDetails(id) {
+  // Complex JOIN query using raw SQL
+  async findById(id) {
     const rows = await prisma.$queryRaw`
-      SELECT e.*, o.name AS owner_name
-      FROM example e LEFT JOIN owners o ON o.id = e.owner_id
-      WHERE e.id = ${id}
+      SELECT b.*,
+        cust.name AS customer_name,
+        ep.name   AS expert_name,
+        s.name    AS service_name,
+        e.current_lat AS expert_lat, e.current_lng AS expert_lng
+      FROM bookings b
+      LEFT JOIN profiles cust ON cust.id = b.customer_id
+      LEFT JOIN profiles ep   ON ep.id   = b.expert_id
+      LEFT JOIN services s    ON s.id    = b.service_id
+      LEFT JOIN experts e     ON e.id    = b.expert_id
+      WHERE b.id = ${id}
     `;
     return rows[0] ?? null;
+  },
+
+  // Dynamic filter — build WHERE clause from optional params
+  async findAll({ status, customerId } = {}) {
+    const filters = [Prisma.sql`1=1`];
+    if (status)     filters.push(Prisma.sql`b.status = ${status}`);
+    if (customerId) filters.push(Prisma.sql`b.customer_id = ${customerId}`);
+    const where = Prisma.sql`WHERE ${Prisma.join(filters, ' AND ')}`;
+    return prisma.$queryRaw`SELECT * FROM bookings b ${where} ORDER BY b.created_at DESC`;
   },
 };
 ```
 
-**Dynamic WHERE clauses** — build `Prisma.sql` fragment arrays and join them:
-
+**Transactions — multiple writes that must all succeed:**
 ```js
-const filters = [];
-if (q) filters.push(Prisma.sql`name LIKE ${`%${q}%`}`);
-const where = filters.length
-  ? Prisma.sql`WHERE ${Prisma.join(filters, ' AND ')}`
-  : Prisma.empty;
-const rows = await prisma.$queryRaw`SELECT * FROM example ${where}`;
-```
-
-**Transactions** — use `prisma.$transaction(async (tx) => { ... })` and pass `tx` into every model method inside the callback. The booking-with-wallet-debit in `bookingController.js` is the canonical example to copy.
-
-```js
+// Example: debit wallet AND create booking atomically
+// If either fails → both roll back automatically
 const bookingId = await prisma.$transaction(async (tx) => {
+  await WalletModel.debitWithConn(tx, userId, amount, null, 'Booking payment');
   const id = await BookingModel.create(payload, tx);
-  await WalletModel.debitWithConn(tx, userId, amount, id, description);
   return id;
 });
 ```
 
-**Schema management** — the Prisma schema lives in `backend/prisma/schema.prisma`. Apply changes with `npm run db:migrate` (runs `prisma db push`) from the `backend/` directory.
+### 6.5 Routes and Controllers
 
-### 6.6 Routes → Controllers
+**Pattern:**
+```
+routes/bookings.js        → POST /bookings → bookingController.create
+controllers/bookingController.js → does the work
+models/BookingModel.js    → does the DB queries
+```
 
-Each domain has a matching route file and controller:
-
-| Route file | Controller |
-|---|---|
-| `routes/auth.js` | `controllers/authController.js` |
-| `routes/bookings.js` | `controllers/bookingController.js` |
-| `routes/experts.js` | `controllers/expertController.js` |
-| `routes/payments.js` | `controllers/paymentController.js` |
-| `routes/services.js` | `controllers/serviceController.js` |
-| `routes/wallet.js` + `routes/customerWallet.js` | `controllers/walletController.js` |
-| `routes/cms.js` | `controllers/cmsController.js` |
-| `routes/admin.js` | `controllers/adminController.js` |
-| `routes/uploads.js` | _(inline — no separate controller)_ |
-
-All controller methods are async. Errors are thrown using helpers from `errors.js`:
-
+**Route file example:**
 ```js
-import { BadRequest, NotFound, Forbidden } from '../errors.js';
+// routes/bookings.js
+import express from 'express';
+import { create, getOne, updateStatus } from '../controllers/bookingController.js';
+import { authMiddleware } from '../middleware/auth.js';
+import { asyncHandler } from '../utils.js';
 
-throw BadRequest('COUPON_EXPIRED', 'This coupon has expired.');
-throw NotFound('Booking not found.');
-throw Forbidden();   // → 403
+const router = express.Router();
+
+router.post('/',             authMiddleware, asyncHandler(create));
+router.get('/:id',           authMiddleware, asyncHandler(getOne));
+router.patch('/:id/status',  authMiddleware, asyncHandler(updateStatus));
+
+export default router;
 ```
 
-`errorHandler` (last middleware in `api.js`) catches these and returns `{ error: 'CODE', message: '...' }` with the correct HTTP status code.
-
-`asyncHandler(fn)` (from `utils.js`) wraps any async route handler so uncaught promise rejections are forwarded to `errorHandler` without needing a try/catch in every route.
-
-### 6.7 Middleware Stack
-
-| File | What it does |
-|---|---|
-| `middleware/auth.js` | `authMiddleware` — verifies Bearer JWT, sets `req.user`. `requireRole(...roles)` — role guard for specific endpoints. `isAdmin(user)` — true for ADMIN or SUPER_ADMIN. |
-| `middleware/rateLimit.js` | `apiLimiter` (300/min/IP), `authLimiter` (20/15min/IP), `otpLimiter` (5/15min, keyed by IP+phone). |
-| `middleware/cors.js` | Reads `ALLOWED_ORIGINS`; blocks unrecognised origins in production. |
-| `middleware/sanitize.js` | Strips HTML tags recursively from all string values in `req.body`. |
-| `middleware/cache.js` | `cacheMiddleware(ttlSeconds)` — caches GET response bodies. `bustCache(prefix)` — invalidates by prefix. |
-| `middleware/errorHandler.js` | Final error handler — normalises all errors to `{ error, message }` JSON with correct HTTP status. |
-
-### 6.8 Providers — Mock → Real
-
-Every external service lives in a provider file that checks for credentials and silently falls back to a mock. **No application code changes are needed to go live.**
-
-| Provider | Real when | Mock behaviour |
-|---|---|---|
-| `providers/paymentProvider.js` | Gateway configured in DB (Admin → Settings → Payment Gateway) or via env vars | Returns `order_mock_xxx` ID; accepts `"mock_signature"` for verification |
-| `providers/smsProvider.js` | `MSG91_AUTH_KEY` or `TWILIO_*` set in `.env` | Logs the OTP to `console.log` |
-| `providers/storageProvider.js` | `AWS_S3_BUCKET` set *(not yet wired in uploads.js)* | Saves to `backend/uploads/`, returns localhost URL |
-| `providers/fcmProvider.js` | `FIREBASE_SERVICE_ACCOUNT` set in `.env` | Logs the notification to `console.log` |
-
-#### Payment provider in depth
-
-`paymentProvider.js` supports **Razorpay** and **Stripe** and reads all configuration from the `settings` DB table (10-second in-process cache). Configuration hierarchy (first set wins):
-
-```
-DB settings table  →  env vars  →  mock mode
-```
-
-**DB keys** (managed via Admin → Settings → Payment Gateway, SUPER_ADMIN only):
-
-| Key | Purpose |
-|---|---|
-| `payment_gateway` | `RAZORPAY` or `STRIPE` |
-| `payment_mode` | `TEST` or `LIVE` |
-| `razorpay_test_key_id` / `razorpay_test_key_secret` | Razorpay test credentials |
-| `razorpay_live_key_id` / `razorpay_live_key_secret` | Razorpay live credentials |
-| `stripe_test_secret_key` / `stripe_test_publishable_key` | Stripe test credentials |
-| `stripe_live_secret_key` / `stripe_live_publishable_key` | Stripe live credentials |
-
-**Razorpay flow:** backend creates an order → frontend opens the Razorpay popup modal → user pays → frontend calls `POST /payments/verify` with `razorpay_order_id` + `razorpay_payment_id` + `razorpay_signature` → backend verifies HMAC-SHA256.
-
-**Stripe flow:** backend creates a Stripe Checkout Session → returns `checkout_url` → frontend redirects to Stripe's hosted page → Stripe redirects back to `/wallet?stripe_done=SESSION_ID` (wallet) or `/track/BOOKING_ID?stripe_done=SESSION_ID` (booking) → frontend auto-calls `POST /payments/verify` with `order_id = SESSION_ID` → backend fetches the session from Stripe API and checks `payment_status === 'paid'`.
-
-Calling `invalidateGatewayCache()` (done automatically on `POST /admin/payment-config`) busts the 10-second cache so changes take effect on the next request without a restart.
-
-### 6.9 Booking Dispatch Service
-
-File: `backend/server/services/dispatchService.js`
-
-When a booking is created, the system immediately tries to find the best available expert:
-
-1. `ExpertModel.findCandidatesForService(serviceId)` — fetches all `ONLINE`, non-busy experts who offer the booked service.
-2. Each candidate gets a **distance** (Haversine great-circle km from booking address to expert's last known location).
-3. Filters out experts further than `DISPATCH_RADIUS_KM` (default: 15 km) — but only when location data is available for both sides.
-4. Sorts remaining candidates: **nearest first → highest rating → lowest active job load**.
-5. **Match found:** assigns immediately, marks expert `BUSY`, emits `booking_assigned` Socket.IO event to the booking room, sends push notification to both customer and expert.
-6. **No match:** booking stays `SEARCHING`. A retry is enqueued after `DISPATCH_RETRY_MS` (default: 8s), up to `DISPATCH_MAX_RETRIES` (default: 5) attempts.
-
-**Queue backend:**
-- `REDIS_URL` set → BullMQ (persistent across restarts, shareable across instances)
-- `REDIS_URL` not set → in-process `setTimeout` (resets if process dies)
-
-### 6.10 Realtime — Socket.IO
-
-File: `backend/server/realtime/io.js`
-
-Socket.IO shares the same HTTP server and port as Express — no second port needed.
-
-**Authentication:** Every socket connection must supply a valid JWT in `handshake.auth.token`. Connections without a valid token are rejected immediately (before any event handler runs).
-
-**Rooms:**
-- `user:<userId>` — every connected user auto-joins this room on connection.
-- `booking:<bookingId>` — customer/expert subscribes via `subscribe_booking` event. Server verifies they are a party to that booking before admitting them.
-
-**Events the server emits:**
-
-| Event | Room | Payload | Trigger |
-|---|---|---|---|
-| `booking_status_updated` | `booking:<id>` | `{ status, message }` | Expert advances booking status |
-| `booking_assigned` | `booking:<id>` | `{ status, eta_minutes, expert_id }` | Dispatch finds an expert |
-| `expert_location_updated` | `booking:<id>` | `{ lat, lng, at }` | Expert emits GPS |
-| `notification` | `user:<id>` | `{ type, title, body }` | Any in-app notification |
-
-**Events the client sends:**
-
-| Event | Sender | Payload |
-|---|---|---|
-| `subscribe_booking` | Customer or Expert | `bookingId` |
-| `expert_location` | Expert | `{ lat, lng }` |
-
-**Multi-instance:** Set `REDIS_URL` to attach the Redis adapter (`@socket.io/redis-adapter`). Without it, a socket on instance A never receives an event emitted from instance B.
-
-### 6.11 Response Caching
-
-File: `backend/server/middleware/cache.js`
-
-Only `GET` requests are cached. The full `req.originalUrl` is the cache key.
-
-- **With Redis:** `SET key value EX ttl` — shared across all instances.
-- **Without Redis:** In-memory `Map<key, {body, expiresAt}>` — per-process only.
-
-**Currently cached:**
-- `GET /services` and `GET /services/:id` — 120s TTL
-- All `GET /cms/*` routes — 120s TTL
-
-**Cache busting:** Service creates/updates call `bustCache(SERVICES_CACHE_PREFIX)`. Add the same pattern whenever you cache a collection that your mutations modify.
-
-Every response includes `X-Cache: HIT` or `X-Cache: MISS` — useful for debugging with `curl -sI`.
-
-### 6.12 File Uploads
-
-File: `backend/server/routes/uploads.js`
-
-`POST /api/v1/uploads` — authenticated. Accepts `multipart/form-data` with a `file` field.
-
-- **Allowed types:** `image/jpeg`, `image/png`, `image/webp`, `application/pdf`
-- **Max size:** 8 MB
-- **Save path:** `backend/uploads/<folder>/<userId>/<uuid>.<ext>`
-- **Returns:** `{ file_url, key }` — `file_url` is absolute, built from `PUBLIC_BACKEND_URL` env var or `req.protocol + req.get('host')`
-
-Files are served statically at `/uploads/*` with `Cross-Origin-Resource-Policy: cross-origin` so the frontend (different origin in dev) can load them as `<img src>`.
-
-**Swapping to S3:** Implement `storageProvider.upload(file) → url` and call it from `routes/uploads.js` instead of writing to disk. Remove the `express.static('/uploads')` mount from `api.js`.
-
----
-
-## 7. Database Schema
-
-File: `backend/server/schema.sql` — all `CREATE TABLE IF NOT EXISTS`, safe to re-run.
-
-### 7.1 Core Tables
-
-| Table | Purpose |
-|---|---|
-| `users` | Core identity: UUID id, email, bcrypt password_hash |
-| `user_roles` | One row per user: role enum (`CUSTOMER`, `EXPERT`, `ADMIN`, `SUPER_ADMIN`) |
-| `profiles` | Display info: name, phone, avatar_url, city |
-| `experts` | Expert profile: bio, gender, experience_years, avg_rating, current GPS, status (`ONLINE`/`OFFLINE`/`BUSY`), is_verified |
-| `expert_services` | Many-to-many: which expert offers which service |
-| `expert_documents` | KYC: type (`AADHAAR`/`PAN`/`SELFIE`), file_url, status (`PENDING`/`APPROVED`/`REJECTED`), review_note |
-| `services` | Catalogue: name, tagline, rate_per_hour, min_hours, icon_name, image_url, is_active |
-| `addresses` | Saved customer addresses with optional lat/lng |
-| `bookings` | Central transaction record (see status flow) |
-| `booking_events` | Timestamped log of every status change (shown in tracking UI) |
-| `payments` | Settlement record per booking: method, amount, status |
-| `payment_transactions` | Razorpay order lifecycle: order_id, payment_id, signature, purpose, status |
-| `customer_wallets` | Customer wallet: balance, total_added, total_spent |
-| `wallet_transactions` | Per-transaction ledger |
-| `expert_wallets` | Expert earnings wallet |
-| `expert_wallet_transactions` | Per-transaction ledger |
-| `withdrawal_requests` | Expert payout requests: amount, status (`REQUESTED`/`APPROVED`/`PAID`/`REJECTED`) |
-| `coupons` | Discount codes: type (`FLAT`/`PERCENT`), value, usage limit, expiry |
-| `coupon_usages` | Tracks which user used which coupon |
-| `reviews` | Customer → expert: rating (1–5), comment |
-| `otp_requests` | Phone OTP: code, purpose, expires_at, used flag |
-| `refresh_tokens` | Hashed refresh tokens with expiry |
-| `notifications` | In-app notification log: type, title, body, read flag |
-| `support_tickets` + `support_messages` | Customer support threading |
-| `cms_banners` | Hero carousel images with sort_order and is_active |
-| `cms_pages` | Slug-based content pages (terms, privacy, refund, etc.) |
-| `settings` | Key-value store: some public (served via `/cms/settings`), some admin-only |
-| `cities` | City catalogue with is_active flag |
-| `audit_log` | Admin action audit trail |
-
-### 7.2 Booking Status Flow
-
-Bookings move forward exactly one step at a time. No skipping, no going backwards.
-
-```
-SEARCHING → ASSIGNED → ACCEPTED → ON_THE_WAY → ARRIVED → IN_PROGRESS → COMPLETED
-    ↑                                                                         ↑
-    └──── CANCELLED (allowed from any state except COMPLETED) ───────────────┘
-```
-
-| Status | Who sets it | Meaning |
-|---|---|---|
-| `SEARCHING` | System (on create) | Booking created, dispatch running |
-| `ASSIGNED` | Dispatch service | Expert found and matched |
-| `ACCEPTED` | Expert | Expert confirmed they're taking the job |
-| `ON_THE_WAY` | Expert | Expert started travelling |
-| `ARRIVED` | Expert | Expert is at the address |
-| `IN_PROGRESS` | Expert | Service has started |
-| `COMPLETED` | Expert | Service done; expert wallet credited |
-| `CANCELLED` | Customer or Admin | Booking cancelled; wallet refunded if applicable |
-
-The `NEXT_STATUS` map in `bookingController.js` enforces valid transitions server-side.
-
-### 7.3 Payment Status Flow
-
-```
-Booking created
-  └── payment_status = PENDING
-
-  ├── WALLET: balance debited atomically at create → payment_status = PAID immediately
-  │
-  ├── CASH:   payment_status = PENDING until expert marks COMPLETED
-  │           → PaymentModel created (method: CASH, status: PAID)
-  │           → payment_status = PAID
-  │
-  └── ONLINE: payment_status = PENDING
-              → Razorpay order created, returned to frontend
-              → Frontend opens checkout modal
-              → POST /payments/verify { order_id, payment_id, signature }
-              → Backend verifies HMAC signature
-              → PaymentModel created (method: CARD, status: PAID)
-              → payment_status = PAID
-```
-
----
-
-## 8. Frontend Architecture
-
-### 8.1 Routing — TanStack Router
-
-TanStack Router uses **file-based routing**. Every file in `src/routes/` becomes a URL automatically. The mapping is maintained in `src/routeTree.gen.ts` — this file is auto-generated; never edit it manually.
-
-| Route file | URL | Protected? |
-|---|---|---|
-| `index.tsx` | `/` | Public |
-| `auth.login.tsx` | `/auth/login` | Public |
-| `auth.signup-customer.tsx` | `/auth/signup-customer` | Public |
-| `auth.signup-expert.tsx` | `/auth/signup-expert` | Public |
-| `book.$serviceId.tsx` | `/book/:serviceId` | Soft (prompts login on confirm) |
-| `bookings.tsx` | `/bookings` | Auth required |
-| `track.$bookingId.tsx` | `/track/:bookingId` | Auth required |
-| `expert.index.tsx` | `/expert` | EXPERT role |
-| `wallet.tsx` | `/wallet` | Auth required |
-| `account.tsx` | `/account` | Auth required |
-| `support.tsx` | `/support` | Auth required |
-| `admin.index.tsx` | `/admin` | ADMIN / SUPER_ADMIN |
-| `terms.tsx` | `/terms` | Public (static) |
-| `privacy.tsx` | `/privacy` | Public (static) |
-| `refund.tsx` | `/refund` | Public (static) |
-| `p.$slug.tsx` | `/p/:slug` | Public (dynamic CMS) |
-
-**To add a new page:** Create `src/routes/your-page.tsx` with `createFileRoute("/your-path")` and export a default component. No registration needed.
-
-### 8.2 Data Fetching — TanStack Query
-
-All server data uses `useQuery` (reads) and `useMutation` (writes). Never use `useState` to store data that comes from the API.
-
-```tsx
-// Read
-const { data, isLoading } = useQuery({
-  queryKey: ["bookings"],                              // unique cache key
-  queryFn: () => apiFetch("/bookings"),               // fetch function
-  refetchInterval: 8000,                              // optional polling
-});
-
-// Write
-const qc = useQueryClient();
-const create = useMutation({
-  mutationFn: (body) => apiFetch("/bookings", {
-    method: "POST",
-    body: JSON.stringify(body),
-  }),
-  onSuccess: () => qc.invalidateQueries({ queryKey: ["bookings"] }), // trigger refetch
-  onError: (e: any) => toast.error(e.message),
-});
-```
-
-**Cache invalidation rule:** After any mutation that changes data another query displays, call `qc.invalidateQueries` in `onSuccess`.
-
-### 8.3 Auth Context
-
-`src/lib/auth-context.tsx` — provides `useAuth()`:
-
-```ts
-{
-  user:    { id: string; email: string; role: AppRole } | null,
-  token:   string | null,
-  role:    AppRole | null,
-  loading: boolean,
-  signOut: () => Promise<void>
+**Controller function example:**
+```js
+// controllers/bookingController.js
+export async function create(req, res) {
+  const { service_id, duration_hours, payment_method, address_snapshot } = req.body;
+
+  // Validate
+  if (!service_id)        throw BadRequest('MISSING_FIELD', 'service_id is required');
+  if (!address_snapshot)  throw BadRequest('MISSING_FIELD', 'address is required');
+
+  // Load service, calculate amounts
+  const service = await ServiceModel.findById(service_id);
+  if (!service) throw NotFound('Service not found');
+  
+  const base = Number(service.rate_per_hour) * duration_hours;
+  const platformFee = Math.round(base * 0.15);
+  const expertAmount = base - platformFee;
+
+  // Create booking
+  const bookingId = await BookingModel.create({
+    customerId: req.user.id,
+    serviceId: service_id,
+    status: 'SEARCHING',
+    baseAmount: base,
+    platformFee,
+    expertAmount,
+    totalAmount: base,
+    paymentMethod: payment_method,
+    addressSnapshot: address_snapshot,
+  });
+
+  // Try to dispatch immediately
+  const booking = await BookingModel.findById(bookingId);
+  await dispatchService.dispatch(booking);
+
+  res.status(201).json(booking);
 }
 ```
 
-It reads the JWT from `localStorage` and re-parses it whenever the `homehero-auth-changed` window event fires (dispatched by `setTokens()` / `clearTokens()` in `api.ts`).
-
-**Route guard pattern used in protected pages:**
-```tsx
-useEffect(() => {
-  if (!loading && !user) router.navigate({ to: "/auth/login" });
-}, [user, loading, router]);
+**Why `asyncHandler`?** It wraps async controller functions so that if they throw, Express catches it correctly:
+```js
+// utils.js
+export const asyncHandler = (fn) => (req, res, next) =>
+  Promise.resolve(fn(req, res, next)).catch(next);
+// .catch(next) passes errors to errorHandler middleware
 ```
 
-### 8.4 API Client — lib/api.ts
+### 6.6 Middleware
 
-`apiFetch(path, options)` — the only function that talks to the backend.
+Middleware functions receive `(req, res, next)`. Call `next()` to continue, throw to stop.
 
-- Automatically adds `Authorization: Bearer <token>`.
-- On `401`: attempts a one-time transparent token refresh (`POST /auth/refresh`), then retries the original request. If refresh fails, calls `clearTokens()`.
-- Throws a proper `Error` with the API's `message` field on any non-2xx response.
+#### `auth.js` — JWT Verification
 
-`uploadFile(file, { folder })` — sends files as `multipart/form-data` to `POST /uploads`. Never sets `Content-Type` manually (browser adds the multipart boundary). Also handles transparent 401 refresh.
+```js
+// Verifies the JWT. Used on every protected route.
+export async function authMiddleware(req, res, next) {
+  const header = req.headers.authorization;   // "Bearer eyJ..."
+  const token  = header?.split(' ')[1];       // "eyJ..."
+  if (!token) throw Forbidden();
 
-`setTokens(access, refresh)` / `clearTokens()` — write/remove tokens and fire `homehero-auth-changed`.
+  const payload = jwt.verify(token, process.env.JWT_SECRET);
+  // Throws JsonWebTokenError if invalid or expired
+  
+  req.user = { id: payload.user_id, email: payload.email, role: payload.role };
+  next();
+}
+```
+
+#### `rateLimit.js` — Abuse Prevention
+
+**What is rate limiting?** Stops attackers from sending thousands of requests per second (brute-force login, spam, DoS attacks).
+
+```js
+import rateLimit from 'express-rate-limit';
+
+// Applied to all /api/v1 routes: max 300 requests per minute per IP
+export const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,  // 1-minute window
+  max: 300,
+  message: { error: 'RATE_LIMITED', message: 'Slow down — too many requests' }
+});
+
+// Applied to login/signup: max 20 attempts per 15 minutes
+export const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20 });
+```
+
+#### `cors.js` — Cross-Origin Resource Sharing
+
+**What is CORS?** Browsers block requests from `localhost:8080` to `localhost:4001` by default (different origins). CORS headers tell the browser it's allowed.
+
+```js
+const allowed = (process.env.ALLOWED_ORIGINS || 'http://localhost:8080').split(',');
+
+export const corsMiddleware = cors({
+  origin: (origin, cb) => {
+    if (!origin || allowed.includes(origin)) cb(null, true);   // allow
+    else cb(new Error('CORS: origin not allowed'));              // block
+  },
+  credentials: true,  // allow cookies/auth headers
+});
+```
+
+#### `sanitize.js` — XSS Prevention
+
+**What is XSS?** If a user enters `<script>alert("hacked")</script>` and we store+display it, their script runs in other users' browsers. We strip all HTML tags from inputs.
+
+```js
+function stripHtml(value) {
+  if (typeof value !== 'string') return value;
+  return value.replace(/<[^>]*>/g, '');  // remove everything inside < >
+}
+
+export const sanitizeBody = (req, res, next) => {
+  req.body = deepStrip(req.body);  // recursively strip all string values
+  next();
+};
+```
+
+#### `cache.js` — Response Caching
+
+Caching stores GET responses so repeated requests don't hit the database:
+
+```js
+// In a route file:
+router.get('/', cacheMiddleware(120), asyncHandler(listServices));
+// First request: hits DB, stores result for 120 seconds
+// Next 120 seconds: served from cache instantly, no DB hit
+
+// After mutating the data — invalidate the cache:
+bustCache('/api/v1/services');
+```
+
+#### `errorHandler.js` — Unified Error Responses
+
+```js
+// The LAST middleware in api.js — catches everything thrown above
+export function errorHandler(err, req, res, next) {
+  const status = err.status || 500;
+  res.status(status).json({
+    error: err.code || 'INTERNAL_ERROR',
+    message: err.message || 'Something went wrong'
+  });
+}
+```
+
+**Always throw, never manually write error responses:**
+```js
+// errors.js helpers:
+throw BadRequest('COUPON_EXPIRED', 'This coupon has expired');  // → 400
+throw NotFound('Booking not found');                             // → 404
+throw Forbidden();                                               // → 403
+```
+
+### 6.7 Payment Gateway
+
+**File: `backend/server/providers/paymentProvider.js`**
+
+All gateway config comes from the `settings` DB table with a 10-second cache. Admin Panel changes take effect immediately (cache cleared on save). Config priority:
+
+```
+DB settings (Admin Panel) → .env variables → mock mode
+```
+
+**Mock mode (development)** — No real money, everything works:
+```js
+// Returns fake IDs, accepts "mock_signature" for verification
+const mock = {
+  async createOrder({ amount }) {
+    return { id: `order_mock_${Date.now()}`, mock: true };
+  },
+  async verifyPayment({ signature }) {
+    return signature === 'mock_signature';
+  }
+};
+```
+
+**Razorpay flow:**
+```
+1. POST /payments/create-order (or POST /bookings with ONLINE payment)
+   Backend → razorpay.orders.create({ amount: 100000, currency: "INR" })
+   Returns { gateway_order_id, gateway_amount, gateway_key_id }
+
+2. Frontend opens Razorpay popup modal
+   new Razorpay({ key, order_id, amount, handler: onSuccess }).open()
+
+3. User pays → onSuccess fires with { razorpay_order_id, razorpay_payment_id, razorpay_signature }
+
+4. Frontend → POST /payments/verify { order_id, payment_id, signature }
+   Backend → verifies: HMAC-SHA256(order_id + "|" + payment_id, secret) === signature
+   → PAID → booking active
+```
+
+**Stripe flow:**
+```
+1. POST /payments/create-order
+   Backend → stripe.checkout.sessions.create({ success_url, cancel_url, line_items })
+   Returns { checkout_url: "https://checkout.stripe.com/pay/cs_test_..." }
+
+2. Frontend → window.location.href = checkout_url
+   (user goes to Stripe's hosted page — handles 3DS, all card types automatically)
+
+3. Stripe redirects back to:
+   /track/BOOKING_ID?stripe_done=cs_test_SESSION_ID
+
+4. Track page detects ?stripe_done= on mount
+   → POST /payments/verify { order_id: "cs_test_..." }
+   Backend → stripe.checkout.sessions.retrieve(sessionId)
+   → payment_status === "paid" → confirmed
+```
+
+**Switching gateways with no restart:**
+Admin Panel → Settings → Payment Gateway → choose gateway + mode → enter keys → Save.
+
+### 6.8 Booking Dispatch
+
+**File: `backend/server/services/dispatchService.js`**
+
+When a booking is created, the system finds the best expert immediately:
+
+```js
+async function findBestExpert(serviceId, bookingCoords) {
+  // 1. All online, non-busy experts who offer this service
+  const candidates = await ExpertModel.findCandidatesForService(serviceId);
+  if (!candidates.length) return null;
+
+  // 2. Score by distance (Haversine formula = great-circle km)
+  const scored = candidates.map(expert => {
+    const distance = (expert.current_lat && bookingCoords?.lat)
+      ? haversineKm(bookingCoords, { lat: expert.current_lat, lng: expert.current_lng })
+      : 9999;
+    return { ...expert, distance };
+  });
+
+  // 3. Filter to dispatch radius (default 15km)
+  const nearby = scored.filter(e => e.distance <= DISPATCH_RADIUS_KM);
+  if (!nearby.length) return null;
+
+  // 4. Sort: nearest → highest rating → fewest active jobs
+  nearby.sort((a, b) =>
+    a.distance - b.distance ||
+    b.avg_rating - a.avg_rating ||
+    a.active_jobs - b.active_jobs
+  );
+
+  return nearby[0];
+}
+```
+
+**After finding a match:**
+```js
+await BookingModel.assign(bookingId, expert.id);             // booking → ASSIGNED
+await ExpertModel.update(expert.id, { status: 'BUSY' });     // expert → won't get more bookings
+emitToBooking(bookingId, 'booking_assigned', { expert_id }); // customer notified in real-time
+await notify(customerId, { type: 'BOOKING_ASSIGNED', title: 'Expert assigned!' });
+```
+
+**When no expert found — retry queue:**
+```js
+// Retries up to 5 times, 8 seconds apart
+await dispatchQueue.enqueueRetry(bookingId, 8000);
+// Booking stays SEARCHING — admin alarm rings
+```
+
+### 6.9 Real-Time — Socket.IO
+
+**File: `backend/server/realtime/io.js`**
+
+Socket.IO shares the same port as Express (no extra port):
+```js
+import { Server } from 'socket.io';
+const io = new Server(httpServer, { cors: { origin: ALLOWED_ORIGINS } });
+// httpServer is the same server that Express uses on port 4001
+```
+
+**Every connection is authenticated:**
+```js
+io.use(async (socket, next) => {
+  const token = socket.handshake.auth.token;
+  try {
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    socket.userId = payload.user_id;
+    socket.role   = payload.role;
+    next();
+  } catch {
+    next(new Error('Unauthorized'));
+  }
+});
+```
+
+**Rooms — send to specific users/bookings only:**
+```js
+// On connect — every user joins their personal room
+socket.join(`user:${socket.userId}`);
+
+// When customer opens track page:
+socket.on('subscribe_booking', async (bookingId, callback) => {
+  const booking = await BookingModel.findById(bookingId);
+  const isParty = booking.customer_id === socket.userId || booking.expert_id === socket.userId;
+  const isAdmin = ['ADMIN', 'SUPER_ADMIN'].includes(socket.role);
+  
+  if (!isParty && !isAdmin) return callback({ error: 'Not your booking' });
+  
+  socket.join(`booking:${bookingId}`);
+  callback({ status: booking.status });
+});
+```
+
+**Expert GPS streaming:**
+```js
+socket.on('expert_location', async ({ lat, lng }) => {
+  if (socket.role !== 'EXPERT') return;
+
+  await ExpertModel.setLocation(socket.userId, lat, lng);  // save to DB
+
+  // Fan out to every customer watching this expert's active bookings
+  const bookings = await BookingModel.findForExpert(socket.userId);
+  for (const b of bookings) {
+    if (ACTIVE_STATUSES.includes(b.status)) {
+      io.to(`booking:${b.id}`).emit('expert_location_updated', { lat, lng });
+    }
+  }
+});
+```
+
+**Sending events from controllers:**
+```js
+// notificationService.js exports these helpers:
+emitToBooking(bookingId, 'booking_status_updated', { status: 'ON_THE_WAY' });
+emitToUser(userId, 'notification', { title: 'Expert assigned!' });
+```
+
+### 6.10 File Uploads
+
+**File: `backend/server/routes/uploads.js`**
+
+We use **Multer** for handling multipart file uploads:
+
+```js
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = `uploads/${req.query.folder}/${req.user.id}/`;
+    fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => cb(null, `${uuid()}.${extension(file.mimetype)}`),
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 8 * 1024 * 1024 },  // 8MB max
+  fileFilter: (req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+    cb(null, allowed.includes(file.mimetype));  // reject other types
+  },
+});
+
+router.post('/', authMiddleware, upload.single('file'), (req, res) => {
+  const fileUrl = `${process.env.PUBLIC_BACKEND_URL}/uploads/...`;
+  res.json({ file_url: fileUrl });
+});
+```
+
+**From the frontend:**
+```ts
+// lib/api.ts
+export async function uploadFile(file: File, { folder }: { folder: string }) {
+  const formData = new FormData();
+  formData.append('file', file);
+  // NEVER set Content-Type manually — browser adds the multipart boundary
+  const res = await fetch(`${API_BASE}/uploads?folder=${folder}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${getToken()}` },
+    body: formData,
+  });
+  return res.json();  // { file_url: "http://..." }
+}
+```
+
+### 6.11 Notifications
+
+**File: `backend/server/services/notificationService.js`**
+
+Every notification does two things at once:
+1. Saved to DB (visible in the notification inbox later)
+2. Pushed via Socket.IO (visible immediately if user is online)
+
+```js
+export async function notify(userId, { type, title, body, bookingId = null }) {
+  // 1. Persist to DB
+  await prisma.notifications.create({
+    data: { user_id: userId, type, title, body, booking_id: bookingId, is_read: false }
+  });
+
+  // 2. Push to connected socket
+  emitToUser(userId, 'notification', { type, title, body, booking_id: bookingId });
+}
+```
+
+**Usage:**
+```js
+await notify(booking.customer_id, {
+  type: 'BOOKING_ASSIGNED',
+  title: 'Expert assigned!',
+  body: `${expertName} is on their way`,
+  bookingId: booking.id,
+});
+```
+
+### 6.12 Caching
+
+Add caching to rarely-changing GET routes:
+```js
+// routes/services.js
+router.get('/', cacheMiddleware(120), asyncHandler(listServices));
+// Cached for 120 seconds. X-Cache: HIT or MISS header shows cache status.
+
+// routes/cms.js
+router.get('/pages/:slug', cacheMiddleware(120), asyncHandler(getPage));
+```
+
+Bust the cache after mutations:
+```js
+// controllers/serviceController.js
+export async function createService(req, res) {
+  const service = await ServiceModel.create(req.body);
+  bustCache('/api/v1/services');  // next GET hits DB again
+  res.status(201).json(service);
+}
+```
+
+### 6.13 Error Handling
+
+**Rule:** Never write `res.status(400).json({ error: '...' })` manually. Always throw.
+
+```js
+// errors.js exports these:
+throw BadRequest('CODE', 'Message');   // HTTP 400
+throw NotFound('Booking not found');   // HTTP 404
+throw Forbidden();                     // HTTP 403
+throw Conflict('EMAIL_TAKEN', '...');  // HTTP 409
+
+// errorHandler returns:
+// { "error": "CODE", "message": "Message" }
+
+// Frontend reads this in useMutation:
+onError: (e: any) => toast.error(e.message),  // shows "Message" to user
+```
+
+---
+
+## 7. Database Schema — Every Table
+
+Edit `backend/prisma/schema.prisma` then run `npm run db:migrate`.
+
+### Identity and auth
+
+| Table | Key columns | Purpose |
+|-------|------------|---------|
+| `users` | `id`, `email`, `password_hash`, `is_blocked` | Core identity |
+| `profiles` | `id` (= user id), `name`, `phone`, `avatar_url`, `city` | Display info |
+| `user_roles` | `user_id`, `role` | CUSTOMER / EXPERT / ADMIN / SUPER_ADMIN |
+| `refresh_tokens` | `user_id`, `token_hash`, `expires_at` | Long-lived auth tokens |
+
+### Expert-specific
+
+| Table | Key columns | Purpose |
+|-------|------------|---------|
+| `experts` | `id`, `bio`, `avg_rating`, `current_lat`, `current_lng`, `status`, `is_verified`, `onboarding_status` | Expert profile + live GPS |
+| `expert_services` | `expert_id`, `service_id` | Which services each expert offers |
+| `expert_documents` | `expert_id`, `type`, `file_url`, `status` | KYC: AADHAAR/PAN/SELFIE |
+| `expert_wallet` | `expert_id`, `balance` | Expert earnings |
+| `expert_wallet_transactions` | `expert_id`, `type`, `amount`, `booking_id` | Earnings ledger |
+| `withdrawal_requests` | `expert_id`, `amount`, `status` | Payout requests |
+
+### Bookings and services
+
+| Table | Key columns | Purpose |
+|-------|------------|---------|
+| `services` | `name`, `rate_per_hour`, `platform_fee_pct`, `icon_name`, `image_url`, `is_active` | Service catalogue |
+| `bookings` | `customer_id`, `expert_id`, `service_id`, `status`, `lat`, `lng`, `payment_method`, `payment_status`, `total_amount` | Central transaction record |
+| `booking_events` | `booking_id`, `status`, `actor`, `created_at` | Status change history (powers the timeline UI) |
+| `addresses` | `customer_id`, `label`, `address_line`, `city`, `pincode`, `lat`, `lng` | Saved customer addresses |
+
+### Payments
+
+| Table | Key columns | Purpose |
+|-------|------------|---------|
+| `payments` | `booking_id`, `method`, `amount`, `status` | Final payment record |
+| `payment_transactions` | `booking_id`, `provider`, `order_id`, `payment_id`, `status` | Gateway order lifecycle |
+| `customer_wallet` | `customer_id`, `balance` | Customer wallet for pre-paid bookings |
+| `wallet_transactions` | `customer_id`, `type`, `amount` | Wallet ledger |
+
+### Everything else
+
+| Table | Purpose |
+|-------|---------|
+| `coupons` + `coupon_usage` | Discount codes and tracking usage |
+| `reviews` | Customer ratings (1–5) linked to completed bookings |
+| `notifications` | In-app notification inbox |
+| `support_tickets` + `ticket_messages` | Customer support threading |
+| `banners` | Homepage hero carousel |
+| `cms_pages` | Slug-based content pages (terms, privacy) |
+| `settings` | Key-value config store (public + admin-only) |
+| `cities` | City catalogue |
+| `audit_logs` | Admin action trail |
+
+### Booking Status Flow
+
+```
+SEARCHING ──► ASSIGNED ──► ACCEPTED ──► ON_THE_WAY ──► ARRIVED ──► IN_PROGRESS ──► COMPLETED
+     │              │           │              │              │              │
+     └──────────────┴───────────┴──────────────┴──────────────┴──────────────┴────► CANCELLED
+```
+
+| Status | Who sets it | Meaning |
+|--------|------------|---------|
+| `SEARCHING` | System | Looking for an expert |
+| `ASSIGNED` | Dispatch service | Expert found and matched |
+| `ACCEPTED` | Expert | Expert confirmed the job |
+| `ON_THE_WAY` | Expert | Expert is travelling |
+| `ARRIVED` | Expert | Expert is at the address |
+| `IN_PROGRESS` | Expert | Service being performed |
+| `COMPLETED` | Expert | Done. Wallet credited. Customer can review |
+| `CANCELLED` | Customer or Admin | Cancelled. Wallet refunded if applicable |
+
+### Payment Status Flow
+
+```
+booking created → payment_status = PENDING
+
+CASH:    stays PENDING → expert marks COMPLETED → PAID
+WALLET:  PAID immediately at booking creation (atomic debit)
+ONLINE:  PENDING → customer pays on gateway → POST /payments/verify → PAID
+```
+
+---
+
+## 8. Frontend — How It Works
+
+### 8.1 TanStack Router
+
+File-based routing: the file name IS the URL.
+
+| File | URL | Note |
+|------|-----|------|
+| `routes/index.tsx` | `/` | Homepage |
+| `routes/auth.login.tsx` | `/auth/login` | Dots → slashes |
+| `routes/book.$serviceId.tsx` | `/book/:serviceId` | `$` = dynamic param |
+| `routes/admin.index.tsx` | `/admin` | `index` = the route itself |
+
+**Adding a new page** (no registration needed):
+```tsx
+// frontend/src/routes/experts.tsx
+import { createFileRoute } from "@tanstack/react-router";
+
+export const Route = createFileRoute("/experts")({
+  head: () => ({ meta: [{ title: "Our Experts — HomeHero" }] }),
+  component: ExpertsPage,
+});
+
+function ExpertsPage() {
+  return <div className="container mx-auto px-4 py-12">Experts list here</div>;
+}
+```
+
+**Navigation:**
+```tsx
+import { useNavigate, Link } from "@tanstack/react-router";
+
+const navigate = useNavigate();
+navigate({ to: "/bookings" });
+navigate({ to: "/track/$bookingId", params: { bookingId: "bk-123" } });
+
+// Or use a Link component:
+<Link to="/bookings">My Bookings</Link>
+```
+
+**Reading URL params:**
+```tsx
+// In track.$bookingId.tsx:
+const { bookingId } = Route.useParams();  // "bk-123"
+```
+
+### 8.2 TanStack Query
+
+**`useQuery` — reading server data:**
+```tsx
+const { data, isLoading, error } = useQuery({
+  queryKey: ["booking", bookingId],         // unique cache key
+  queryFn: () => apiFetch(`/bookings/${bookingId}`),
+  enabled: !!user,                          // only fetch when logged in
+  refetchInterval: 15000,                   // poll every 15 seconds
+});
+
+if (isLoading) return <LoadingSpinner />;
+if (!data) return <div>Booking not found</div>;
+
+return <div>{data.service_name}</div>;
+```
+
+**`useMutation` — writing data:**
+```tsx
+const qc = useQueryClient();
+
+const cancelBooking = useMutation({
+  mutationFn: () => apiFetch(`/bookings/${bookingId}/cancel`, { method: "POST" }),
+  onSuccess: () => {
+    toast.success("Booking cancelled");
+    qc.invalidateQueries({ queryKey: ["booking", bookingId] }); // re-fetch
+  },
+  onError: (e: any) => toast.error(e.message),
+});
+
+<Button onClick={() => cancelBooking.mutate()} disabled={cancelBooking.isPending}>
+  {cancelBooking.isPending ? "Cancelling…" : "Cancel"}
+</Button>
+```
+
+**TanStack Query v5 — no `onSuccess` in `useQuery`:**
+```tsx
+// WRONG (removed in v5):
+useQuery({ queryFn: ..., onSuccess: (data) => setState(data) });
+
+// CORRECT (use useEffect):
+const { data } = useQuery({ queryFn: ... });
+useEffect(() => {
+  if (data) setState(data);  // run when data arrives
+}, [data]);
+```
+
+### 8.3 Auth Context
+
+```tsx
+import { useAuth } from "@/lib/auth-context";
+
+const { user, role, loading, signOut } = useAuth();
+// user  = { id, email, role } | null
+// role  = "CUSTOMER" | "EXPERT" | "ADMIN" | "SUPER_ADMIN" | null
+// loading = true during first render only
+
+// Standard route guard:
+useEffect(() => {
+  if (!loading && !user) navigate({ to: "/auth/login" });
+}, [user, loading, navigate]);
+```
+
+### 8.4 API Client
+
+**File: `frontend/src/lib/api.ts`**
+
+Every API call goes through `apiFetch`. Never call `fetch` directly.
+
+```ts
+// What apiFetch does:
+// 1. Adds Authorization header automatically
+// 2. On 401: silently refreshes token and retries
+// 3. On error: throws Error with the API's message field
+
+const data = await apiFetch("/bookings");           // GET
+const booking = await apiFetch("/bookings", {       // POST
+  method: "POST",
+  body: JSON.stringify({ service_id: "..." }),
+});
+await apiFetch(`/experts/${id}`, {                  // PATCH
+  method: "PATCH",
+  body: JSON.stringify({ status: "ONLINE" }),
+});
+```
 
 ### 8.5 Socket Client
 
-`src/lib/socket.ts` — exports `getSocket()`. Lazily creates one Socket.IO connection authenticated with the current access token. Returns `null` when there's no token, so callers never need to guard against null manually.
-
 ```ts
-const socket = getSocket();
-socket?.emit("subscribe_booking", bookingId, (ack) => {
-  console.log(ack.status); // current booking status
-});
-socket?.on("expert_location_updated", ({ lat, lng }) => {
-  // move marker on map
-});
+import { getSocket, disconnectSocket } from "@/lib/socket";
+
+// In a useEffect — always clean up:
+useEffect(() => {
+  const socket = getSocket();
+  if (!socket) return;
+
+  socket.emit("subscribe_booking", bookingId);
+
+  const onLocation = ({ lat, lng }: any) => setExpertLoc({ lat, lng });
+  const onStatus   = ({ status }: any) => qc.invalidateQueries({ queryKey: ["booking", bookingId] });
+
+  socket.on("expert_location_updated", onLocation);
+  socket.on("booking_status_updated",  onStatus);
+
+  return () => {
+    socket.emit("unsubscribe_booking", bookingId);
+    socket.off("expert_location_updated", onLocation);
+    socket.off("booking_status_updated",  onStatus);
+  };
+}, [user, bookingId]);
+
+// On logout:
+disconnectSocket();
 ```
 
-Call `disconnectSocket()` on logout to close the connection and reset the singleton.
+### 8.6 Every Page
 
-### 8.6 Pages Reference
+| URL | File | Key features |
+|-----|------|-------------|
+| `/` | `index.tsx` | Service grid, banner carousel, FAQ, testimonials |
+| `/auth/login` | `auth.login.tsx` | Email+password, auto-redirect by role |
+| `/auth/signup-customer` | `auth.signup-customer.tsx` | Customer registration |
+| `/auth/signup-expert` | `auth.signup-expert.tsx` | 3-step wizard: info → services → KYC |
+| `/book/:serviceId` | `book.$serviceId.tsx` | Duration, type, address + "Use my location", coupon, payment |
+| `/bookings` | `bookings.tsx` | Booking history with status badges |
+| `/track/:bookingId` | `track.$bookingId.tsx` | Live status timeline, Leaflet GPS map |
+| `/expert` | `expert.index.tsx` | Online toggle, GPS broadcast, job management |
+| `/wallet` | `wallet.tsx` | Balance, top-up, transaction history |
+| `/account` | `account.tsx` | Profile edit, saved addresses |
+| `/notifications` | `notifications.tsx` | Inbox with unread/all tabs |
+| `/support` | `support.tsx` | Submit and reply to tickets |
+| `/admin` | `admin.index.tsx` | Entire admin panel |
+| `/p/:slug` | `p.$slug.tsx` | Dynamic CMS pages |
 
-| Page | Key features |
-|---|---|
-| `/` | Hero + BannerSlider (CMS banners or built-in slides), services grid, how-it-works, stats, why-us, cities, testimonials, FAQ accordion, app store strip, expert CTA |
-| `/book/:serviceId` | Hours/Days duration toggle, instant/scheduled type, saved + new address, coupon input, Cash/Wallet/Online payment, Razorpay checkout for Online |
-| `/track/:bookingId` | Live status timeline (booking_events), live map with expert GPS marker via Socket.IO |
-| `/expert` | Online/offline toggle, live GPS broadcast (every 10s), job cards with Accept/Advance/Reject, earnings widget, KYC doc upload tiles with status icons |
-| `/wallet` | Balance card, quick-amount + custom top-up, Razorpay checkout for top-up, transaction history |
-| `/auth/signup-expert` | 3-step animated form: personal info (Zod validation + inline errors) → services grid + experience stepper + gender → KYC doc tiles with preview + live profile card |
-| `/admin` | Analytics charts (recharts), expert list + KYC review dialog (image preview + Approve/Reject), booking list, service/coupon/CMS/support/settings management |
-| `/terms`, `/privacy`, `/refund` | Static pages with rich legal content — no DB dependency |
+### 8.7 React Hooks Rules
+
+**Hooks must be called in the same order on every render. Never inside `if` blocks or after early `return`.**
+
+**The most common mistake — hook AFTER early return:**
+
+```tsx
+function BookPage() {
+  const { data: service, isLoading } = useQuery(...);  // hook 1
+  const [coupon, setCoupon] = useState(null);           // hook 2
+
+  if (isLoading) return <Spinner />;  // ← early return
+
+  // ❌ WRONG: this hook is skipped when isLoading=true
+  useEffect(() => {
+    if (coupon) revalidate();
+  }, [coupon]);
+  // Error: "Rendered more hooks than during the previous render"
+}
+```
+
+**Fix — move ALL hooks above early returns:**
+```tsx
+function BookPage() {
+  const { data: service, isLoading } = useQuery(...);  // hook 1
+  const [coupon, setCoupon] = useState(null);           // hook 2
+
+  // ✅ CORRECT: hook is above the early return
+  useEffect(() => {
+    if (!coupon || !service) return;  // guard INSIDE the hook
+    revalidate();
+  }, [coupon, service]);
+
+  if (isLoading) return <Spinner />;  // ← safe now, all hooks already called
+
+  return <div>{service.name}</div>;
+}
+```
+
+**Symptom of the bug:** "Rendered more hooks than during the previous render" — first render (loading=true) called N hooks, second render (loading=false) called N+1 hooks.
+
+### 8.8 Tailwind and shadcn/ui
+
+**Tailwind — one class per CSS property:**
+```tsx
+<div className="
+  flex items-center gap-3    → flexbox with centered items and 12px gap
+  rounded-2xl border bg-card → rounded corners, 1px border, card background
+  p-5 shadow-sm              → 20px padding, subtle shadow
+">
+```
+
+**shadcn/ui components — used throughout:**
+```tsx
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { toast } from "sonner";  // notifications
+
+<Button variant="outline" size="sm" onClick={save}>Save</Button>
+<Input placeholder="Enter email" value={email} onChange={(e) => setEmail(e.target.value)} />
+toast.success("Saved!");
+toast.error("Something went wrong");
+```
 
 ---
 
-## 9. Key End-to-End Flows
+## 9. End-to-End Flows
 
-### 9.1 Customer Books a Service
+### Customer Books a Service
 
 ```
-1. GET /services  →  homepage renders service grid
+1. Homepage loads: GET /services → service grid
 
-2. Customer selects a service  →  /book/:serviceId
+2. Customer clicks "Cleaning" → /book/service-id
 
-3. Customer fills: duration (hours or days), type (instant/scheduled),
-   address (saved or new), optional coupon, payment method
+3. Page loads:
+   GET /services/:id       → rate, description
+   GET /addresses          → saved addresses
+   GET /wallet             → balance (for wallet payment)
 
-4. "Book now"  →  POST /bookings {
-     service_id, duration_hours, booking_type, scheduled_at?,
-     address_id or address_snapshot, coupon_code?, payment_method, notes?
+4. Customer fills:
+   - 3 hours, INSTANT booking
+   - Address: clicks "Use my location"
+     → navigator.geolocation.getCurrentPosition()
+     → fetch Nominatim reverse geocode
+     → fills city/pincode fields automatically
+   - Payment: Online (Razorpay)
+
+5. "Book Now" → POST /bookings {
+     service_id, duration_hours: 3,
+     address_snapshot: "B-12, Indira Nagar, Bengaluru",
+     lat: 12.9716, lng: 77.5946,
+     payment_method: "ONLINE"
    }
 
-5. Backend — bookingController.create():
-   a. Validates inputs
-   b. Evaluates coupon (CouponModel.evaluate)
-   c. If WALLET: checks balance, debits atomically in DB transaction
-   d. Creates booking row (status: SEARCHING, payment_status: PENDING/PAID)
-   e. dispatchService.findBestExpert() → ranks ONLINE experts by distance/rating/load
-   f. Match found:  → assigns, marks expert BUSY, emits booking_assigned socket event
-      No match:     → schedules background retry via dispatchQueue
-   g. If ONLINE payment: creates Razorpay order, returns gateway_order_id in response
+6. Backend:
+   a. Load service → base=₹600, platform_fee=₹90, expert_amount=₹510
+   b. Create booking (status: SEARCHING, payment_status: PENDING)
+   c. Create Razorpay order → order_id: "order_abc"
+   d. dispatchService → finds "Ravi" nearby → assigns
+   e. Ravi status → BUSY
+   f. Socket emit → "booking_assigned" to customer
+   g. Push notification to Ravi
 
-6. Frontend receives { id, status, gateway_order_id?, ... }
-   → navigates to /track/:bookingId
-   → if ONLINE: opens Razorpay modal, on success calls POST /payments/verify
+7. Frontend:
+   → navigate to /track/bk-xyz
+   → Razorpay popup opens → customer pays
+   → POST /payments/verify { order_id, payment_id, signature }
+   → HMAC verified → payment_status = PAID
+
+8. Track page shows:
+   Status: ASSIGNED
+   Map: Ravi's GPS dot moving toward customer's pin
+   ETA: ~20 min
 ```
 
-### 9.2 Payment — Cash / Wallet / Online
-
-**Cash** — No upfront charge. `payment_status = PENDING`. When expert marks `COMPLETED`, `bookingController.updateStatus` creates a `PaymentModel` record and sets `payment_status = PAID`.
-
-**Wallet** — Deducted atomically at booking creation (single DB transaction: INSERT booking + UPDATE wallet). `payment_status = PAID` immediately. Refunded via `WalletModel.credit()` on cancellation.
-
-**Online (Razorpay):**
-```
-booking created  →  backend creates Razorpay order
-                    → returns { gateway_order_id, gateway_amount, gateway_key_id, gateway_mock }
-
-If gateway_mock = true (no RAZORPAY keys configured):
-  → frontend auto-verifies: POST /payments/verify { order_id, payment_id: "pay_mock", signature: "mock_signature" }
-  → payment_status = PAID, navigate to tracking
-
-If gateway_mock = false (real keys):
-  → frontend loads checkout.razorpay.com/v1/checkout.js
-  → opens Razorpay modal (card / UPI / NetBanking)
-  → on success: POST /payments/verify { order_id: resp.razorpay_order_id, payment_id, signature }
-  → backend verifies HMAC: SHA256(order_id | payment_id) === signature
-  → payment_status = PAID, navigate to tracking
-```
-
-### 9.3 Expert Signup + KYC
+### Expert Completes a Job
 
 ```
-Step 1: Personal info (name, email, phone, city, password, bio)
-        → validated client-side with Zod on each field blur + on Continue
+Expert dashboard (/expert):
 
-Step 2: Services selection + experience (± stepper) + gender
-        → must select at least one service to proceed
+1. Toggle ONLINE → PATCH /experts/:id { status: "ONLINE" }
+2. GPS starts: socket.emit("expert_location", { lat, lng }) every 10s
 
-Step 3: KYC documents (AADHAAR / PAN / SELFIE — all optional at signup)
-        → file picker tiles with inline image preview
-        → live "profile preview" card showing name, city, experience, selected services
+3. "booking_assigned" Socket.IO event received
+   → alarm rings, job card appears
 
-On Submit:
-  POST /auth/signup  { ..., role: "EXPERT", service_ids: [...] }
-  POST /auth/login   → { accessToken, refreshToken }  (auto-login to upload docs)
-  setTokens(access, refresh)
-  for each chosen doc:
-    POST /uploads?folder=kyc/aadhaar  (multipart)  → { file_url }
-    POST /experts/:id/documents        { type, file_url }
-  navigate('/expert')
-
-Admin KYC review:
-  /admin → Experts section → "Docs" button
-  → dialog shows image previews (not raw URLs)
-  PATCH /admin/experts/:id/documents/:docId  { status: "APPROVED" | "REJECTED" }
-  → once verified: expert.is_verified = true → starts receiving bookings
+4. Tap ACCEPT → PATCH /bookings/:id/status { status: "ACCEPTED" }
+5. Tap ON THE WAY → { status: "ON_THE_WAY" }
+   (GPS keeps broadcasting → customer sees movement on map)
+6. Tap ARRIVED → { status: "ARRIVED" }
+7. Tap START → { status: "IN_PROGRESS" }
+8. Tap COMPLETE → { status: "COMPLETED" }
+   bookingController:
+   → For CASH: creates PaymentModel (method: CASH, status: PAID)
+   → Credits expert wallet: ₹510
+   → Expert status → ONLINE (free to take next booking)
+   → Customer can now review
 ```
 
-### 9.4 Live Booking Tracking
+### Live Map Explained
 
 ```
-Customer on /track/:bookingId:
-  getSocket().emit("subscribe_booking", bookingId, ack)
-  → server checks: is user the customer or expert of this booking?
-  → joins room booking:<bookingId>
-  → ack returns current status + eta
+1. Track page loads:
+   GET /bookings/:id
+   → booking.expert_lat, booking.expert_lng (Ravi's last GPS from DB)
+   → if non-null: seed map immediately (no waiting)
 
-Expert on /expert dashboard (while online):
-  every 10 seconds:
-    navigator.geolocation.getCurrentPosition(...)
-    socket.emit("expert_location", { lat, lng })
-  
-  → server: ExpertModel.setLocation(expertId, lat, lng)  [persists to DB]
-  → server: for each ACTIVE booking of this expert:
-      emitToBooking(bookingId, "expert_location_updated", { lat, lng, at })
+2. Socket subscribed:
+   socket.emit("subscribe_booking", bookingId)
 
-Customer receives:
-  "expert_location_updated"  → moves expert marker on LiveMap component
-  "booking_status_updated"   → updates status timeline + badge
+3. Expert dashboard every 10s:
+   socket.emit("expert_location", { lat: 12.9720, lng: 77.5950 })
 
-Expert advances status:
-  PATCH /bookings/:id/status { status: "ON_THE_WAY" }
-  → server: BookingModel.updateStatus()
-  → server: emitToBooking(id, "booking_status_updated", { status, message })
-  → customer sees update in real time
+4. Server:
+   → saves to experts.current_lat = 12.9720
+   → emits "expert_location_updated" to booking:bk-xyz room
+
+5. Track page:
+   socket.on("expert_location_updated", ({ lat, lng }) => setExpertLoc({ lat, lng }))
+
+6. LiveMap component:
+   → expert prop changed → moves purple circle marker
+   → re-fetches OSRM route between expert and customer destination
+   → draws purple road-following polyline
+
+Map destination pin:
+   → booking.lat, booking.lng stored when customer booked
+   → "Use my location" button → Nominatim → populates these
 ```
 
 ---
 
-## 10. Admin Panel
+## 10. How to Make Common Changes
 
-Route: `/admin` — ADMIN and SUPER_ADMIN only.
+### Add a new API endpoint
 
-| Section | What you can do |
-|---|---|
-| Dashboard | Revenue bar chart, bookings-by-status pie chart, key metrics |
-| Bookings | Full list with status filter; view booking details |
-| Experts | Search by name; view / approve / reject KYC documents (image preview dialog); toggle active status |
-| Customers | List all customers |
-| Services | Create / edit / toggle active services (name, tagline, rate_per_hour, image_url, icon_name) |
-| Coupons | Create FLAT or PERCENT coupons with usage limits, minimum order, and expiry |
-| CMS | Edit page content by slug; manage hero banners (image URL, link, sort order, active toggle) |
-| Support | View all support tickets; reply as staff; close tickets |
-| Settings | Manage public and admin key-value settings |
+**Example: `GET /api/v1/experts/:id/reviews`**
 
-Adding a new admin section: add a tab to the sidebar nav array in `admin.index.tsx`, add a corresponding `section === "your-section"` block in the content area, and wire up the API calls.
+```js
+// Step 1: routes/experts.js — add the route
+router.get('/:id/reviews', asyncHandler(getExpertReviews));
+
+// Step 2: controllers/reviewController.js — add the handler
+export async function getExpertReviews(req, res) {
+  const { id } = req.params;
+  const reviews = await ReviewModel.findForExpert(id);
+  res.json({ reviews });
+}
+
+// Step 3: models/ReviewModel.js — add the DB query
+async findForExpert(expertId) {
+  return prisma.$queryRaw`
+    SELECT r.*, p.name AS customer_name
+    FROM reviews r
+    LEFT JOIN profiles p ON p.id = r.customer_id
+    WHERE r.expert_id = ${expertId}
+    ORDER BY r.created_at DESC
+  `;
+},
+
+// Step 4: frontend — call it
+const { data } = useQuery({
+  queryKey: ['expert-reviews', expertId],
+  queryFn: () => apiFetch(`/experts/${expertId}/reviews`),
+});
+```
+
+### Add a new database column
+
+```bash
+# 1. Edit backend/prisma/schema.prisma
+# Add to the model: response_time_minutes  Float?
+
+# 2. Apply:
+cd backend && npm run db:migrate
+
+# 3. Use in code:
+await prisma.experts.update({ where: { id }, data: { response_time_minutes: 8.5 } });
+```
+
+### Add a new frontend page
+
+```tsx
+// frontend/src/routes/my-page.tsx — that's all you need
+import { createFileRoute } from "@tanstack/react-router";
+
+export const Route = createFileRoute("/my-page")({
+  head: () => ({ meta: [{ title: "My Page — HomeHero" }] }),
+  component: MyPage,
+});
+
+function MyPage() {
+  return <div className="container mx-auto px-4 py-12">Hello</div>;
+}
+```
+
+### Add a new admin section
+
+In `frontend/src/routes/admin.index.tsx`:
+
+```tsx
+// 1. Add to sidebar navigation array:
+{ id: "reports", label: "Reports", icon: BarChart },
+
+// 2. Add data fetching (after all existing useQuery calls):
+const { data: reportData } = useQuery({
+  enabled: isAdmin && section === "reports",
+  queryKey: ["admin-reports"],
+  queryFn: () => apiFetch("/admin/reports"),
+});
+
+// 3. Add section content (inside the return):
+{section === "reports" && (
+  <div className="space-y-6">
+    <h2 className="text-xl font-bold">Reports</h2>
+    {/* your UI */}
+  </div>
+)}
+```
+
+### Add a real-time event
+
+```js
+// Backend: emit from a controller
+emitToBooking(bookingId, 'eta_updated', { eta_minutes: 12 });
+
+// Frontend: listen in a useEffect
+socket.on('eta_updated', ({ eta_minutes }) => setEta(eta_minutes));
+// Cleanup:
+socket.off('eta_updated');
+```
+
+### Add a new notification type
+
+```js
+// Backend: call notify() from any controller
+await notify(userId, {
+  type: 'PROMO_OFFER',
+  title: '20% off this weekend!',
+  body: 'Use code SAVE20',
+  bookingId: null,
+});
+// Frontend NotificationBell + /notifications page handle all types automatically
+```
 
 ---
 
-## 11. Adding a New Feature — Checklist
+## 11. Admin Panel — Full Guide
 
-### New API endpoint
+The entire admin panel is in `frontend/src/routes/admin.index.tsx` — one large component.
 
-1. Add the route in `backend/server/routes/<domain>.js` with `asyncHandler()` wrapper.
-2. Implement the handler in `backend/server/controllers/<domain>Controller.js`.
-3. Add DB queries to `backend/server/models/<Domain>Model.js` if needed.
-4. Add `authMiddleware` + `requireRole(...)` in the route file for protected endpoints.
-5. Wrap read routes with `cacheMiddleware(ttl)` if data changes infrequently; call `bustCache(prefix)` in the corresponding mutation.
+### Access by role
 
-### New frontend page
+| Section | Minimum role |
+|---------|-------------|
+| Overview, KYC, Experts, Bookings, Users, Services, Coupons, Settlements, Support | ADMIN |
+| Payment Gateway settings, Platform settings, Admins, Audit Log | SUPER_ADMIN |
 
-1. Create `frontend/src/routes/your-page.tsx` with `createFileRoute("/your-path")`.
-2. Export a component; add the `head()` meta for the page title.
-3. Router picks it up automatically. Add a link from `Footer.tsx` or `Navbar.tsx` if needed.
+### Key features
 
-### New external provider
+**KYC Queue — three tabs:**
+- **Pending review**: `onboarding_status = SUBMITTED or INCOMPLETE`
+- **Rejected**: `onboarding_status = REJECTED` — shown with red border, "Re-approve" button
+- **All unverified**: every unverified expert
 
-1. Create `backend/server/providers/yourProvider.js`.
-2. Check `const ENABLED = Boolean(process.env.YOUR_KEY)` at the top.
-3. Export real implementation when enabled, mock when not. Log clearly in mock mode.
-4. Import and call from the controller that needs it.
+**Manual expert assignment:**
+1. Bookings section → find a SEARCHING booking
+2. Amber "Assign expert" panel shows all online+verified experts
+3. Click Assign — dispatch bypassed, expert directly matched
 
-### New notification type
+**Payment gateway config (SUPER_ADMIN only):**
+1. Settings → Payment Gateway
+2. Pick gateway (Razorpay/Stripe) + mode (Test/Live)
+3. Enter key pair — the active pair is highlighted
+4. Click Save — effective instantly, no restart
 
-1. Call `notify(userId, { type, title, body, bookingId })` from the relevant controller.
-2. Notification is saved to DB + emitted via `emitToUser()` simultaneously.
-3. `NotificationBell` component in `Navbar.tsx` polls `/notifications` for unread count.
+**Track any booking:**
+- Overview: click "📍 Track" on any recent booking row
+- Bookings table: "📍 Track" column button
+- Booking detail dialog: "📍 Track live" button in header
 
-### New realtime event
-
-1. Call `emitToBooking(bookingId, "event_name", payload)` or `emitToUser(userId, ...)` from the controller.
-2. In the frontend: `socket?.on("event_name", handler)` inside a `useEffect`.
-
----
-
-## 12. Going to Production
-
-### Required before launch
-
-1. **Strong JWT secret:**
-   ```bash
-   openssl rand -hex 32
-   # → paste result as JWT_SECRET in .env
-   ```
-2. **Set `NODE_ENV=production`** — activates JWT strength guard and strict CORS.
-3. **Set `ALLOWED_ORIGINS`** — your frontend domain(s), comma-separated.
-4. **Set `PUBLIC_BACKEND_URL`** — base URL for uploaded file links (e.g. `https://api.homehero.com`).
-5. **Set `REDIS_URL`** if running more than one API process.
-6. **Set Razorpay keys** — `RAZORPAY_KEY_ID` + `RAZORPAY_KEY_SECRET`.
-7. **Set SMS keys** — `MSG91_AUTH_KEY` (recommended for India) or Twilio.
-8. **Set `FIREBASE_SERVICE_ACCOUNT`** — for mobile push notifications.
-9. **Nginx config** — reverse-proxy `/api/` and WebSocket upgrades to Node; serve `frontend/dist/` as static files.
-10. **DB user** — create a dedicated MySQL user with `SELECT, INSERT, UPDATE, DELETE` on `homehero.*` only.
-
-### Scaling checklist
-
-| Need | What to do |
-|---|---|
-| Multiple API processes | Set `REDIS_URL` (enables shared cache, BullMQ, Socket.IO Redis adapter) |
-| Read replicas | Add a second pool in `db.js`; route read-only model methods to it |
-| S3 file storage | Implement `storageProvider.upload()`, call it from `routes/uploads.js`, remove local `express.static` |
-| Rate limit tuning | Adjust `RATE_LIMIT_API`, `RATE_LIMIT_AUTH`, `RATE_LIMIT_OTP` in `.env` |
-| Larger dispatch radius | Set `DISPATCH_RADIUS_KM` env var |
+All open `/track/:bookingId` in a new tab showing the admin view (customer info, payment info, live map, status).
 
 ---
 
-## 13. External Services Reference
+## 12. Hosting and Deployment
 
-| Service | Purpose | Env vars needed | When mocked |
-|---|---|---|---|
-| **Razorpay** | Card / UPI / NetBanking payments and wallet top-up | `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` | Returns fake order ID; `verifySignature` accepts `"mock_signature"` |
-| **MSG91** | SMS OTP (India, preferred) | `MSG91_AUTH_KEY`, `MSG91_SENDER_ID`, `MSG91_OTP_TEMPLATE_ID` | OTP printed to `console.log` |
-| **Twilio** | SMS OTP fallback | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | OTP printed to `console.log` |
-| **Firebase FCM** | Push notifications | `FIREBASE_SERVICE_ACCOUNT` (JSON, single line) | Notification printed to `console.log` |
-| **Redis** | Dispatch queue (BullMQ), Socket.IO multi-instance, response cache | `REDIS_URL` | In-process `setTimeout` queue; per-process memory cache; single-instance Socket.IO |
-| **AWS S3** | Production file storage for KYC docs | `AWS_S3_BUCKET`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | Files saved locally to `backend/uploads/` |
+### What runs on the server
+
+| Process | Command (from `backend/`) | Port |
+|---------|--------------------------|------|
+| Monolith API | `node server/api.js` | 4001 |
+| API Gateway | `node services/gateway/server.js` | 4000 |
+| Auth service | `node services/auth-service/server.js` | 4101 |
+| Payment service | `node services/payment-service/server.js` | 4102 |
+| Booking service | `node services/booking-service/server.js` | 4103 |
+| Frontend SSR | `node server/prod-server.js` | 4174 |
+
+Nginx (port 443) is the only public-facing process. All Node ports stay on localhost.
+
+### Step-by-step: deploy to a fresh Ubuntu server
+
+**1. Server setup:**
+```bash
+# Node.js 20
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+# PM2 (Node process manager)
+npm install -g pm2
+
+# MySQL 8
+sudo apt install mysql-server -y
+sudo systemctl start mysql && sudo systemctl enable mysql
+sudo mysql_secure_installation
+
+# Redis
+sudo apt install redis-server -y
+sudo systemctl start redis-server && sudo systemctl enable redis-server
+
+# Nginx
+sudo apt install nginx certbot python3-certbot-nginx -y
+```
+
+**2. Copy code:**
+```bash
+git clone https://github.com/your-org/homehero-spark.git /var/www/homehero
+cd /var/www/homehero
+npm run install:all
+```
+
+**3. Configure environment:**
+```bash
+cp backend/.env.example backend/.env
+nano backend/.env
+```
+```env
+DATABASE_URL=mysql://homehero:STRONG_PASSWORD@127.0.0.1:3306/homehero
+JWT_SECRET=run: openssl rand -hex 32
+NODE_ENV=production
+ALLOWED_ORIGINS=https://yourdomain.com
+REDIS_URL=redis://localhost:6379
+PUBLIC_BACKEND_URL=https://yourdomain.com/api
+FRONTEND_URL=https://yourdomain.com
+```
+
+**4. Create MySQL database:**
+```bash
+sudo mysql -u root -p << 'SQL'
+CREATE DATABASE homehero CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'homehero'@'localhost' IDENTIFIED BY 'STRONG_PASSWORD';
+GRANT SELECT, INSERT, UPDATE, DELETE ON homehero.* TO 'homehero'@'localhost';
+FLUSH PRIVILEGES;
+SQL
+```
+
+**5. Migrate and create admin:**
+```bash
+npm run db:migrate
+# Do NOT run db:seed in production
+
+cd backend && npm run create-admin
+# Follow prompts to set admin email + password
+```
+
+**6. Build frontend:**
+```bash
+cd /var/www/homehero/frontend
+echo "VITE_API_BASE=https://yourdomain.com/api/v1" > .env
+npm run build
+cd /var/www/homehero
+```
+
+**7. Start with PM2:**
+```bash
+cd /var/www/homehero/backend
+pm2 start ../deploy/pm2.ecosystem.cjs
+pm2 save
+pm2 startup  # copy+paste the command it prints to enable auto-start on reboot
+```
+
+**8. Set up HTTPS + Nginx:**
+```bash
+sudo certbot --nginx -d yourdomain.com
+
+sudo cp /var/www/homehero/deploy/nginx.conf /etc/nginx/sites-available/homehero
+# Edit: replace app.homehero.com with your domain
+sudo nano /etc/nginx/sites-available/homehero
+
+sudo ln -s /etc/nginx/sites-available/homehero /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+**9. Verify:**
+```bash
+curl https://yourdomain.com/api/v1/health
+# { "status": "ok", "db": "connected" }
+```
+
+### Docker Compose alternative
+
+```bash
+cd /var/www/homehero
+export JWT_SECRET=$(openssl rand -hex 32)
+export DATABASE_URL=mysql://homehero:STRONG_PASSWORD@db:3306/homehero
+export ALLOWED_ORIGINS=https://yourdomain.com
+export NODE_ENV=production
+
+docker compose up --build -d
+docker compose exec monolith npm run db:migrate
+
+# Logs:
+docker compose logs -f
+```
 
 ---
 
-*Last updated: June 2026 · Branch: `feature/marketplace-complete`*
+## 13. Daily Operations
+
+### Check status and logs
+
+```bash
+pm2 status              # all processes + CPU/RAM
+pm2 monit               # real-time dashboard
+pm2 logs                # all logs streamed
+pm2 logs monolith       # monolith only
+pm2 logs monolith --lines 200  # last 200 lines
+```
+
+### Health checks
+
+```bash
+# API + DB health
+curl https://yourdomain.com/api/v1/health
+
+# Gateway routing table
+curl https://yourdomain.com/gateway/health
+
+# Test login works
+curl -X POST https://yourdomain.com/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@homehero.test","password":"YourAdminPassword"}'
+```
+
+### Database backup
+
+```bash
+# Manual backup
+mysqldump -u homehero -p homehero | gzip > /backups/$(date +%Y%m%d_%H%M).sql.gz
+
+# Automated daily at 2am (add to crontab: crontab -e)
+0 2 * * * mysqldump -u homehero -pPASSWORD homehero | gzip > /backups/homehero_$(date +\%Y\%m\%d).sql.gz
+
+# Restore
+gunzip < /backups/20260601.sql.gz | mysql -u homehero -p homehero
+```
+
+### Deploying an update
+
+```bash
+cd /var/www/homehero
+
+# 1. Pull new code
+git pull origin main
+
+# 2. Install new packages (if any)
+npm run install:all
+
+# 3. Apply DB changes (safe to run anytime — only adds, never drops)
+npm run db:migrate
+
+# 4. Rebuild frontend
+cd frontend && npm run build && cd ..
+
+# 5. Reload all processes without downtime
+cd backend && pm2 reload all
+
+# 6. Verify
+curl https://yourdomain.com/api/v1/health
+```
+
+### If something breaks after an update
+
+```bash
+# Roll back to previous commit
+git reset --hard HEAD~1
+
+# Rebuild and restart
+npm run install:all
+cd frontend && npm run build && cd ..
+cd backend && pm2 reload all
+```
+
+---
+
+## 14. Debugging Common Problems
+
+### API returns 404
+
+```bash
+# Is the monolith running?
+curl http://localhost:4001/api/v1/health
+
+# If not: start it
+pm2 start ../deploy/pm2.ecosystem.cjs
+
+# Check the route exists
+grep "your-route" backend/server/routes/*.js backend/server/api.js
+```
+
+### 401 Unauthorized
+
+```bash
+# Get a fresh token:
+TOKEN=$(curl -s -X POST http://localhost:4001/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@homehero.test","password":"YourPassword"}' \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['accessToken'])")
+
+# Use it:
+curl -H "Authorization: Bearer $TOKEN" http://localhost:4001/api/v1/admin/overview
+```
+
+**If `JWT_SECRET` changed:** Everyone gets logged out. Users must log in again.
+
+### 403 Forbidden
+
+1. Check route uses `requireRole('ADMIN', 'SUPER_ADMIN')` not just `requireRole('ADMIN')`
+2. Check controller uses `isAdmin(req.user)` not `req.user.role === 'ADMIN'`
+3. Verify user's role in DB:
+```bash
+mysql -u homehero -p homehero -e "
+  SELECT u.email, r.role 
+  FROM users u JOIN user_roles r ON r.user_id = u.id 
+  WHERE u.email = 'user@example.com';"
+```
+
+### Bookings stuck in SEARCHING
+
+```bash
+# Check for online experts
+mysql -u homehero -p homehero -e "SELECT id, status FROM experts WHERE status = 'ONLINE';"
+
+# Check experts offer the service
+mysql -u homehero -p homehero -e "
+  SELECT e.id, e.status, es.service_id
+  FROM experts e JOIN expert_services es ON es.expert_id = e.id
+  WHERE e.status = 'ONLINE';"
+
+# Check dispatch logs
+pm2 logs monolith 2>&1 | grep -i "dispatch\|assign"
+```
+
+### Live map not showing
+
+Map requires: status is ASSIGNED/ON_THE_WAY/ARRIVED/IN_PROGRESS AND at least one of:
+- `expertLoc` from Socket.IO (expert must be online on dashboard)
+- `booking.lat + booking.lng` (set when customer used "Use my location")
+
+```bash
+# Check if booking has coordinates
+mysql -u homehero -p homehero -e "SELECT id, lat, lng FROM bookings WHERE id = 'bk-xxx';"
+```
+
+### Socket.IO not connecting
+
+Check Nginx WebSocket config:
+```nginx
+# /etc/nginx/sites-enabled/homehero
+location /socket.io/ {
+    proxy_pass http://localhost:4000;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;    # ← required for WS
+    proxy_set_header Connection "upgrade";     # ← required for WS
+}
+```
+
+### Database connection refused
+
+```bash
+sudo systemctl status mysql
+
+# Test connection (use 127.0.0.1, not localhost — Prisma on Linux prefers it)
+mysql -u homehero -p -h 127.0.0.1 homehero
+
+# Check DATABASE_URL:
+grep DATABASE_URL backend/.env
+```
+
+### "Rendered more hooks than during the previous render"
+
+A React hook is after an early `return`. Find and fix:
+1. Open the component file
+2. Find every early `return` (before the main JSX return)
+3. Move any `useEffect`/`useState`/`useQuery` that comes after them to ABOVE them
+4. Add null guards inside the hooks: `if (!service) return;`
+
+### Payment gateway in mock mode after adding keys
+
+1. Keys saved in Admin Panel → take effect instantly (cache busted)
+2. Keys in `.env` → require restart: `pm2 reload monolith`
+3. Stripe test keys: `sk_test_...` / live: `sk_live_...` — don't mix
+4. Check logs: `pm2 logs monolith 2>&1 | grep -i "stripe\|razorpay\|payment"`
+
+---
+
+## 15. Security — What We Do and Why
+
+| Measure | File | Why it matters |
+|---------|------|----------------|
+| **Helmet.js** | `api.js` global | 15 HTTP security headers. `X-Frame-Options` prevents clickjacking. `Strict-Transport-Security` enforces HTTPS |
+| **CORS** | `middleware/cors.js` | Without this, any website could make API calls using a logged-in user's cookies |
+| **Rate limiting** | `middleware/rateLimit.js` | Stops brute-force attacks (thousands of password guesses), spam, DoS |
+| **HTML sanitization** | `middleware/sanitize.js` | Strips `<script>` from inputs. Prevents stored XSS (cross-site scripting) |
+| **bcrypt passwords** | `authController.js` | Passwords hashed with salt. Leaked DB is useless — attacker must crack each hash individually |
+| **Short JWT expiry (15 min)** | `auth/tokens.js` | Stolen access token becomes useless quickly |
+| **Refresh token hashing** | `auth/tokens.js` | Token stored as SHA-256 hash in DB — leaked DB doesn't expose actual tokens |
+| **SQL injection prevention** | All models using `Prisma.sql` | Parameterised queries — values never interpolated into SQL strings |
+| **File type validation** | `routes/uploads.js` | Only images + PDF allowed. Prevents uploading executable files |
+| **Role guards** | `middleware/auth.js` | Enforced server-side — frontend checks are just UX, not security |
+| **HTTPS only** | Nginx + Certbot | Encrypts all traffic. Without it, JWTs can be stolen on public WiFi |
+
+### Pre-launch security checklist
+
+```bash
+# 1. Strong JWT secret (64 hex characters = 32 bytes of entropy)
+openssl rand -hex 32
+# Paste into JWT_SECRET in backend/.env
+
+# 2. NODE_ENV=production
+grep NODE_ENV backend/.env
+
+# 3. ALLOWED_ORIGINS is your domain (not localhost or *)
+grep ALLOWED_ORIGINS backend/.env
+
+# 4. MySQL user has minimal privileges
+mysql -u root -p -e "SHOW GRANTS FOR 'homehero'@'localhost';"
+# Should show only: SELECT, INSERT, UPDATE, DELETE — not ALL PRIVILEGES
+
+# 5. .env not in git
+git log --all -- backend/.env    # must return nothing
+cat .gitignore | grep ".env"     # must show backend/.env
+
+# 6. HTTPS working
+curl -I https://yourdomain.com | head -5
+# Should show: HTTP/2 200
+```
+
+---
+
+## 16. Quick Reference Card
+
+### Most-used commands
+
+```bash
+# Setup (first time)
+npm run install:all       # install all dependencies
+npm run db:migrate        # create/update database tables
+npm run db:seed           # fill with demo data (dev only)
+
+# Development
+npm run dev:all           # start everything (API + frontend)
+npm run dev:backend       # API only (:4001)
+npm run dev:frontend      # frontend only (:8080)
+
+# Database
+npm run db:migrate        # apply schema changes
+cd backend && npm run create-admin  # create first admin user
+
+# Production
+npm run build             # build frontend
+cd backend && pm2 reload all  # reload without downtime
+
+# Testing
+npm run smoke:admin       # automated admin tests
+npm run smoke:flows       # booking flow tests
+```
+
+### PM2 commands (production)
+
+```bash
+pm2 status               # all processes
+pm2 logs                 # all logs
+pm2 logs monolith        # one service
+pm2 reload all           # zero-downtime reload
+pm2 restart monolith     # full restart one service
+pm2 stop all             # stop everything
+kill $(lsof -ti tcp:4001 -sTCP:LISTEN)  # kill monolith safely
+```
+
+### Where to find things
+
+| Task | File |
+|------|------|
+| Add API endpoint | `backend/server/routes/<domain>.js` + `controllers/<domain>Controller.js` |
+| Add DB table/column | `backend/prisma/schema.prisma` + `npm run db:migrate` |
+| Add frontend page | `frontend/src/routes/your-page.tsx` (auto-registered) |
+| Change payment logic | `backend/server/providers/paymentProvider.js` |
+| Change dispatch algorithm | `backend/server/services/dispatchService.js` |
+| Add real-time event | `backend/server/realtime/io.js` |
+| Change booking status flow | `backend/server/controllers/bookingController.js` (NEXT_STATUS map) |
+| Edit homepage | `frontend/src/routes/index.tsx` |
+| Edit admin panel | `frontend/src/routes/admin.index.tsx` |
+| Edit Navbar | `frontend/src/components/layout/Navbar.tsx` |
+| Change notification behaviour | `backend/server/services/notificationService.js` |
+| Change DB query for bookings | `backend/server/models/BookingModel.js` |
+
+---
+
+*Last updated: June 2026 · For admin operations see `ADMIN_GUIDE.md` · For project status see `STATUS.md`*

@@ -15,18 +15,27 @@ const services = [
   { id: 'svc-cooking',   name: 'Cooking Help',       slug: 'cooking-help',     tagline: 'Chopping, prep & cooking',     icon_name: 'ChefHat',    rate_per_hour: 269, min_hours: 1, sort_order: 6, description: 'Vegetable chopping, dough kneading and basic meal prep.',              image_url: IMG('photo-1556909212-d5b604d0c90d') },
 ];
 
-const PORTRAIT = (n) => `https://randomuser.me/api/portraits/women/${n}.jpg`;
+const PORTRAIT  = (n) => `https://randomuser.me/api/portraits/women/${n}.jpg`;
+const MPORTRAIT = (n) => `https://randomuser.me/api/portraits/men/${n}.jpg`;
 
 const experts = [
-  { id: 'exp-1', name: 'Lakshmi Nair',  city: 'Bengaluru', phone: '9876500001', avatar: PORTRAIT(68), bio: 'Cleaning & dishwashing specialist with 6 years of experience.', experience_years: 6, avg_rating: 4.9, review_count: 312, total_jobs: 1240, status: 'ONLINE',  services: ['svc-cleaning', 'svc-dishes', 'svc-kitchen'] },
-  { id: 'exp-2', name: 'Priya Sharma',  city: 'Bengaluru', phone: '9876500002', avatar: PORTRAIT(65), bio: 'Expert in kitchen and bathroom deep cleaning. Friendly and thorough.', experience_years: 4, avg_rating: 4.8, review_count: 198, total_jobs: 760,  status: 'ONLINE',  services: ['svc-kitchen', 'svc-bathroom', 'svc-cleaning'] },
-  { id: 'exp-3', name: 'Anjali Verma',  city: 'Mumbai',    phone: '9876500003', avatar: PORTRAIT(44), bio: 'Loves cooking help and laundry. Punctual and warm.',              experience_years: 5, avg_rating: 4.9, review_count: 256, total_jobs: 980,  status: 'ONLINE',  services: ['svc-cooking', 'svc-laundry', 'svc-dishes'] },
-  { id: 'exp-4', name: 'Sunita Reddy',  city: 'Hyderabad', phone: '9876500004', avatar: PORTRAIT(52), bio: 'All-round household help. 8 years of trusted service.',            experience_years: 8, avg_rating: 4.7, review_count: 421, total_jobs: 1620, status: 'OFFLINE', services: ['svc-cleaning', 'svc-bathroom', 'svc-laundry', 'svc-kitchen'] },
+  { id: 'exp-1', name: 'Lakshmi Nair',    city: 'Bengaluru', phone: '9876500001', avatar: PORTRAIT(68),  gender: 'FEMALE', bio: 'Cleaning & dishwashing specialist with 6 years of experience.', experience_years: 6, avg_rating: 4.9, review_count: 312, total_jobs: 1240, status: 'ONLINE',  services: ['svc-cleaning', 'svc-dishes', 'svc-kitchen'] },
+  { id: 'exp-2', name: 'Priya Sharma',    city: 'Bengaluru', phone: '9876500002', avatar: PORTRAIT(65),  gender: 'FEMALE', bio: 'Expert in kitchen and bathroom deep cleaning. Friendly and thorough.', experience_years: 4, avg_rating: 4.8, review_count: 198, total_jobs: 760,  status: 'ONLINE',  services: ['svc-kitchen', 'svc-bathroom', 'svc-cleaning'] },
+  { id: 'exp-3', name: 'Anjali Verma',    city: 'Mumbai',    phone: '9876500003', avatar: PORTRAIT(44),  gender: 'FEMALE', bio: 'Loves cooking help and laundry. Punctual and warm.',              experience_years: 5, avg_rating: 4.9, review_count: 256, total_jobs: 980,  status: 'ONLINE',  services: ['svc-cooking', 'svc-laundry', 'svc-dishes'] },
+  { id: 'exp-4', name: 'Sunita Reddy',    city: 'Hyderabad', phone: '9876500004', avatar: PORTRAIT(52),  gender: 'FEMALE', bio: 'All-round household help. 8 years of trusted service.',            experience_years: 8, avg_rating: 4.7, review_count: 421, total_jobs: 1620, status: 'OFFLINE', services: ['svc-cleaning', 'svc-bathroom', 'svc-laundry', 'svc-kitchen'] },
+  { id: 'exp-5', name: 'Abhishek Kumar', city: 'Bengaluru', phone: '9876500005', avatar: MPORTRAIT(32), gender: 'MALE',   bio: 'Multi-service expert for cooking, cleaning and laundry. 3 years experience.', experience_years: 3, avg_rating: 4.6, review_count: 87, total_jobs: 310, status: 'ONLINE',  services: ['svc-cooking', 'svc-cleaning', 'svc-laundry'] },
 ];
 
 const customer = { id: 'cust-demo', name: 'Aarti Customer', email: 'customer@snabbit.test', city: 'Bengaluru', phone: '9999900000', avatar: PORTRAIT(90) };
 
 async function upsertAccount({ id, email, name, city, phone, avatar }, role, passwordHash) {
+  // Remove any conflicting user that has the same email but a different id
+  const conflict = await prisma.users.findFirst({ where: { email, NOT: { id } } });
+  if (conflict) {
+    await prisma.user_roles.deleteMany({ where: { user_id: conflict.id } });
+    await prisma.profiles.deleteMany({ where: { id: conflict.id } });
+    await prisma.users.delete({ where: { id: conflict.id } });
+  }
   await prisma.users.upsert({
     where: { id },
     create: { id, email, password_hash: passwordHash, is_verified: true },
@@ -61,7 +70,7 @@ async function run() {
     await upsertAccount({ id: e.id, email: `${e.id}@snabbit.test`, name: e.name, city: e.city, phone: e.phone, avatar: e.avatar }, 'EXPERT', passwordHash);
     await prisma.experts.upsert({
       where: { id: e.id },
-      create: { id: e.id, gender: 'FEMALE', bio: e.bio, experience_years: e.experience_years, avg_rating: e.avg_rating, review_count: e.review_count, total_jobs: e.total_jobs, is_verified: true, is_trained: true, status: e.status, onboarding_status: 'APPROVED', service_pincodes: [] },
+      create: { id: e.id, gender: e.gender ?? 'FEMALE', bio: e.bio, experience_years: e.experience_years, avg_rating: e.avg_rating, review_count: e.review_count, total_jobs: e.total_jobs, is_verified: true, is_trained: true, status: e.status, onboarding_status: 'APPROVED', service_pincodes: [] },
       update: { bio: e.bio, experience_years: e.experience_years, avg_rating: e.avg_rating, review_count: e.review_count, total_jobs: e.total_jobs, is_verified: true, is_trained: true, status: e.status },
     });
     await prisma.expert_wallet.upsert({ where: { expert_id: e.id }, create: { expert_id: e.id }, update: {} });
@@ -128,10 +137,14 @@ async function run() {
   console.log(`  ${cities.length} cities, ${settingsList.length} settings, ${banners.length} banners, ${pages.length} CMS pages`);
 
   await upsertAccount({ id: 'superadmin-demo', email: 'superadmin@homehero.test', name: 'Super Admin', city: 'Bengaluru' }, 'SUPER_ADMIN', passwordHash);
+  await upsertAccount({ id: 'admin-demo', email: 'admin@homehero.test', name: 'Admin User', city: 'Bengaluru' }, 'ADMIN', passwordHash);
   console.log('  1 super-admin (superadmin@homehero.test)');
+  console.log('  1 admin      (admin@homehero.test)');
 
   console.log('\nSeed complete. Demo password: ' + DEMO_PASSWORD);
-  console.log('  Customer: ' + customer.email);
+  console.log('  Super Admin: superadmin@homehero.test');
+  console.log('  Admin:       admin@homehero.test');
+  console.log('  Customer:    ' + customer.email);
   experts.forEach((e) => console.log('  Expert:   ' + e.id + '@snabbit.test (' + e.name + ')'));
 }
 

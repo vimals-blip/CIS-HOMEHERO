@@ -54,6 +54,7 @@ enum PaymentMethod {
   WALLET
   UPI
   CARD
+  ONLINE
 }
 
 enum BookingPaymentStatus {
