@@ -25,6 +25,15 @@ const STATUS_PILL: Record<string, string> = {
   CLOSED: "bg-slate-200 text-slate-600",
 };
 
+const STATUS_FILTERS = [
+  { id: "ALL", label: "All" },
+  { id: "OPEN", label: "Open" },
+  { id: "IN_PROGRESS", label: "In Progress" },
+  { id: "RESOLVED", label: "Resolved" },
+  { id: "CLOSED", label: "Closed" },
+] as const;
+type StatusFilter = typeof STATUS_FILTERS[number]["id"];
+
 function SupportPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
@@ -33,6 +42,7 @@ function SupportPage() {
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ subject: "", message: "" });
   const [reply, setReply] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
 
   useEffect(() => { if (!loading && !user) router.navigate({ to: "/auth/login" }); }, [user, loading, router]);
 
@@ -94,6 +104,13 @@ function SupportPage() {
   }
 
   // ── List + create ────────────────────────────────────────────────────────────
+  const allTickets = tickets as any[];
+  const filtered = statusFilter === "ALL" ? allTickets : allTickets.filter((t) => t.status === statusFilter);
+  const counts = STATUS_FILTERS.reduce((acc, f) => {
+    acc[f.id] = f.id === "ALL" ? allTickets.length : allTickets.filter((t) => t.status === f.id).length;
+    return acc;
+  }, {} as Record<string, number>);
+
   return (
     <div className="container mx-auto max-w-2xl px-4 py-10">
       <div className="flex items-center justify-between gap-3">
@@ -115,11 +132,32 @@ function SupportPage() {
         </div>
       )}
 
-      <div className="mt-6 space-y-2">
-        {(tickets as any[]).length === 0 ? (
-          <EmptyState icon={LifeBuoy} title="No tickets yet" description="Raise a ticket and our team will get back to you." />
+      {/* Status filter tabs */}
+      <div className="mt-6 flex gap-1 overflow-x-auto rounded-xl border bg-muted/40 p-1">
+        {STATUS_FILTERS.map((f) => (
+          <button
+            key={f.id}
+            onClick={() => setStatusFilter(f.id)}
+            className={cn(
+              "flex-shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
+              statusFilter === f.id ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {f.label}
+            {counts[f.id] > 0 && (
+              <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px]">{counts[f.id]}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-4 space-y-2">
+        {filtered.length === 0 ? (
+          <EmptyState icon={LifeBuoy}
+            title={statusFilter === "ALL" ? "No tickets yet" : `No ${statusFilter.toLowerCase().replace("_", " ")} tickets`}
+            description={statusFilter === "ALL" ? "Raise a ticket and our team will get back to you." : "Try a different filter."} />
         ) : (
-          (tickets as any[]).map((t) => (
+          filtered.map((t) => (
             <button key={t.id} onClick={() => setOpenId(t.id)} className="flex w-full items-center justify-between rounded-2xl border bg-card p-4 text-left transition-colors hover:border-primary/40">
               <div className="min-w-0">
                 <div className="truncate font-medium">{t.subject}</div>

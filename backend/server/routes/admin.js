@@ -25,8 +25,10 @@ router.delete('/users/:userId', superAdmin, asyncHandler(adminController.deleteU
 // Audit trail — super-admin only.
 router.get('/audit-logs', superAdmin, asyncHandler(adminController.getAuditLogs));
 router.get('/reports',        asyncHandler(adminController.getReport));
-router.get('/bookings',       asyncHandler(adminController.getBookings));
-router.get('/bookings/:id',  asyncHandler(adminController.getBookingDetail));
+router.get('/bookings',              asyncHandler(adminController.getBookings));
+router.get('/bookings/:id',          asyncHandler(adminController.getBookingDetail));
+router.post('/bookings/:id/assign',  asyncHandler(adminController.assignBooking));
+router.get('/available-experts',     asyncHandler(adminController.getAvailableExperts));
 router.get('/experts/:id',   asyncHandler(adminController.getExpertDetail));
 router.patch('/experts/:id', asyncHandler(adminController.updateExpert));
 router.delete('/experts/:id', superAdmin, asyncHandler(adminController.deleteExpert));
@@ -46,6 +48,8 @@ router.post('/settings',     superAdmin, asyncHandler(cmsController.saveSetting)
 router.get('/cities',        superAdmin, asyncHandler(cmsController.allCities));
 router.post('/cities',       superAdmin, asyncHandler(cmsController.createCity));
 router.patch('/cities/:id',  superAdmin, asyncHandler(cmsController.toggleCity));
+router.get('/payment-config',  superAdmin, asyncHandler(adminController.getPaymentConfig));
+router.post('/payment-config', superAdmin, asyncHandler(adminController.savePaymentConfig));
 
 // ── Admin management (SUPER_ADMIN only) ─────────────────────────────────────
 router.get('/admins',  superAdmin, asyncHandler(adminController.listAdmins));

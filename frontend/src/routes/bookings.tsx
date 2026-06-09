@@ -36,11 +36,11 @@ function matchesTab(status: string, tab: Tab) {
 function BookingsPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
-  const [tab, setTab] = useState<Tab>("active");
+  const [tab, setTab] = useState<Tab>("all");
 
   useEffect(() => { if (!loading && !user) router.navigate({ to: "/auth/login" }); }, [user, loading, router]);
 
-  const { data: bookings = [], isLoading } = useQuery({
+  const { data: bookings = [], isLoading, isError } = useQuery({
     enabled: !!user,
     queryKey: ["my-bookings", user?.id],
     queryFn: () => apiFetch(`/bookings`),
@@ -48,6 +48,7 @@ function BookingsPage() {
   });
 
   if (loading || isLoading) return <div className="container mx-auto px-4 py-16"><LoadingSpinner /></div>;
+  if (isError) return <div className="container mx-auto px-4 py-16 text-center text-destructive">Failed to load bookings. Please refresh and try again.</div>;
 
   const all = bookings as any[];
   const counts = {

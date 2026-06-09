@@ -2,10 +2,11 @@ import { Prisma } from '@prisma/client';
 import prisma from '../prisma.js';
 
 export const UserModel = {
-  async findAll({ limit, offset, q, role }) {
+  async findAll({ limit, offset, q, role, is_blocked }) {
     const filters = [];
     if (q) filters.push(Prisma.sql`(p.name LIKE ${`%${q}%`} OR u.email LIKE ${`%${q}%`})`);
     if (role) filters.push(Prisma.sql`ur.role = ${role}`);
+    if (is_blocked === true) filters.push(Prisma.sql`u.is_blocked = 1`);
     const where = filters.length
       ? Prisma.sql`WHERE ${Prisma.join(filters, ' AND ')}`
       : Prisma.empty;

@@ -2,36 +2,41 @@ import { PaymentTxnModel } from '../models/PaymentTxnModel.js';
 import { WalletModel } from '../models/WalletModel.js';
 import { PaymentModel } from '../models/PaymentModel.js';
 import { BookingModel } from '../models/BookingModel.js';
-import { paymentProvider, PROVIDER } from '../providers/paymentProvider.js';
+import { paymentProvider } from '../providers/paymentProvider.js';
 import { BadRequest, NotFound, HttpError } from '../errors.js';
 
 const MAX_AMOUNT = 100000;
 
 export const paymentController = {
-  // Create a gateway order for a wallet top-up (booking payments use wallet/cash).
   async createOrder(req, res) {
-    const amount = Number(req.body.amount);
+    const amount  = Number(req.body.amount);
     const purpose = req.body.purpose === 'BOOKING' ? 'BOOKING' : 'WALLET_TOPUP';
     if (!amount || amount <= 0) throw BadRequest('INVALID_AMOUNT', 'Enter a valid amount.');
     if (amount > MAX_AMOUNT) throw BadRequest('AMOUNT_TOO_LARGE', `Maximum is ₹${MAX_AMOUNT}.`);
 
-    const order = await paymentProvider.createOrder({ amount, receipt: `rcpt_${Date.now()}` });
+    const origin = req.headers.origin || req.headers.referer || '';
+    const order  = await paymentProvider.createOrder({ amount, receipt: `rcpt_${Date.now()}`, origin });
+
     await PaymentTxnModel.create({
-      userId: req.user.id, bookingId: req.body.booking_id ?? null,
-      orderId: order.id, amount, purpose, provider: order.provider ?? PROVIDER,
+      userId:    req.user.id,
+      bookingId: req.body.booking_id ?? null,
+      orderId:   order.id,
+      amount,
+      purpose,
+      provider:  order.provider ?? 'MOCK',
     });
 
     res.status(201).json({
-      order_id: order.id,
-      amount: order.amount,        // paise
-      currency: order.currency,
-      mock: Boolean(order.mock),
-      key_id: order.key_id ?? null,
-      provider: order.provider ?? PROVIDER,
+      order_id:     order.id,
+      amount:       order.amount,       // paise
+      currency:     order.currency,
+      mock:         Boolean(order.mock),
+      key_id:       order.key_id       ?? null,
+      provider:     order.provider     ?? 'MOCK',
+      checkout_url: order.checkout_url ?? null,  // Stripe only
     });
   },
 
-  // Verify a completed payment and fulfil it (credit wallet for top-ups).
   async verify(req, res) {
     const { order_id, payment_id, signature } = req.body;
     if (!order_id || !payment_id || !signature) {
@@ -43,7 +48,13 @@ export const paymentController = {
     if (txn.user_id !== req.user.id) throw new HttpError(403, 'FORBIDDEN', 'Not your payment.');
     if (txn.status === 'PAID') return res.json({ status: 'already_paid' });
 
-    const valid = paymentProvider.verifySignature({ orderId: order_id, paymentId: payment_id, signature });
+    const valid = await paymentProvider.verifyPayment({
+      orderId:   order_id,
+      paymentId: payment_id,
+      signature,
+      provider:  txn.provider,
+    });
+
     if (!valid) {
       await PaymentTxnModel.markFailed(txn.id);
       throw new HttpError(400, 'SIGNATURE_INVALID', 'Payment verification failed.');
@@ -51,7 +62,7 @@ export const paymentController = {
 
     await PaymentTxnModel.markPaid(txn.id, payment_id, signature);
 
-    let wallet = null;
+    let wallet  = null;
     let booking = null;
 
     if (txn.purpose === 'WALLET_TOPUP') {

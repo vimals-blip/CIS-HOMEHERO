@@ -179,6 +179,7 @@ function BookService() {
       const booking = await apiFetch("/bookings", { method: "POST", body: JSON.stringify(body) });
 
       if (paymentMethod === "ONLINE" && booking.gateway_order_id) {
+        // Mock mode
         if (booking.gateway_mock) {
           await apiFetch("/payments/verify", {
             method: "POST",
@@ -189,15 +190,22 @@ function BookService() {
           return;
         }
 
+        // Stripe — redirect to hosted checkout (verify happens on /track page return)
+        if (booking.gateway_provider === "STRIPE" && booking.gateway_checkout_url) {
+          window.location.href = booking.gateway_checkout_url;
+          return;
+        }
+
+        // Razorpay — popup modal
         const loaded = await loadRazorpay();
         if (!loaded) { toast.error("Could not load payment gateway — try again"); setSubmitting(false); return; }
 
         new (window as any).Razorpay({
-          key: booking.gateway_key_id,
-          order_id: booking.gateway_order_id,
-          amount: booking.gateway_amount,
-          currency: booking.gateway_currency ?? "INR",
-          name: "HomeHero",
+          key:         booking.gateway_key_id,
+          order_id:    booking.gateway_order_id,
+          amount:      booking.gateway_amount,
+          currency:    booking.gateway_currency ?? "INR",
+          name:        "HomeHero",
           description: `${service.name} · ${durationUnit === "days" ? `${durationValue} day${durationValue > 1 ? "s" : ""}` : `${totalHours} hrs`}`,
           prefill: { email: user.email },
           theme: { color: "#7c3aed" },
@@ -206,9 +214,9 @@ function BookService() {
               await apiFetch("/payments/verify", {
                 method: "POST",
                 body: JSON.stringify({
-                  order_id: resp.razorpay_order_id,
+                  order_id:   resp.razorpay_order_id,
                   payment_id: resp.razorpay_payment_id,
-                  signature: resp.razorpay_signature,
+                  signature:  resp.razorpay_signature,
                 }),
               });
               toast.success("Payment received — booking confirmed!");

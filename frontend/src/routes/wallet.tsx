@@ -18,7 +18,6 @@ export const Route = createFileRoute("/wallet")({
 
 const QUICK = [200, 500, 1000, 2000];
 
-// Load the Razorpay checkout script once (only needed in real mode).
 function loadRazorpay(): Promise<boolean> {
   return new Promise((resolve) => {
     if ((window as any).Razorpay) return resolve(true);
@@ -30,11 +29,13 @@ function loadRazorpay(): Promise<boolean> {
   });
 }
 
-// Full top-up: create a gateway order, then verify. Mock mode auto-verifies;
-// real mode opens Razorpay checkout and verifies the signed response.
-async function topUpFlow(amount: number) {
-  const order = await apiFetch("/payments/order", { method: "POST", body: JSON.stringify({ amount, purpose: "WALLET_TOPUP" }) });
+async function topUpFlow(amount: number): Promise<any> {
+  const order = await apiFetch("/payments/order", {
+    method: "POST",
+    body: JSON.stringify({ amount, purpose: "WALLET_TOPUP" }),
+  });
 
+  // Mock mode — auto-verify
   if (order.mock) {
     return apiFetch("/payments/verify", {
       method: "POST",
@@ -42,24 +43,31 @@ async function topUpFlow(amount: number) {
     });
   }
 
+  // Stripe — redirect to hosted checkout page
+  if (order.provider === "STRIPE" && order.checkout_url) {
+    window.location.href = order.checkout_url;
+    return new Promise(() => {}); // never resolves; page navigates away
+  }
+
+  // Razorpay — popup modal
   const ok = await loadRazorpay();
   if (!ok) throw new Error("Could not load payment gateway");
   return new Promise((resolve, reject) => {
     const rzp = new (window as any).Razorpay({
-      key: order.key_id,
-      order_id: order.order_id,
-      amount: order.amount,
-      currency: order.currency,
-      name: "HomeHero Wallet",
+      key:         order.key_id,
+      order_id:    order.order_id,
+      amount:      order.amount,
+      currency:    order.currency,
+      name:        "HomeHero Wallet",
       description: "Wallet top-up",
       handler: async (resp: any) => {
         try {
           resolve(await apiFetch("/payments/verify", {
             method: "POST",
             body: JSON.stringify({
-              order_id: resp.razorpay_order_id,
+              order_id:   resp.razorpay_order_id,
               payment_id: resp.razorpay_payment_id,
-              signature: resp.razorpay_signature,
+              signature:  resp.razorpay_signature,
             }),
           }));
         } catch (e) { reject(e); }
@@ -78,10 +86,37 @@ function WalletPage() {
 
   useEffect(() => { if (!loading && !user) router.navigate({ to: "/auth/login" }); }, [user, loading, router]);
 
+  // Handle Stripe return: ?stripe_done=SESSION_ID or ?stripe_cancel=1
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get("stripe_done");
+    const cancelled = params.get("stripe_cancel");
+
+    if (sessionId && user) {
+      // Clean URL first
+      window.history.replaceState({}, "", window.location.pathname);
+      apiFetch("/payments/verify", {
+        method: "POST",
+        body: JSON.stringify({ order_id: sessionId, payment_id: sessionId, signature: "stripe" }),
+      })
+        .then(() => {
+          toast.success("Wallet topped up successfully!");
+          qc.invalidateQueries({ queryKey: ["wallet"] });
+        })
+        .catch((e: any) => toast.error(e.message ?? "Payment verification failed"));
+    }
+
+    if (cancelled) {
+      window.history.replaceState({}, "", window.location.pathname);
+      toast.error("Payment cancelled");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
   const { data, isLoading } = useQuery({
     enabled: !!user,
     queryKey: ["wallet", user?.id],
-    queryFn: () => apiFetch("/wallet"),
+    queryFn:  () => apiFetch("/wallet"),
   });
 
   const topUp = useMutation({

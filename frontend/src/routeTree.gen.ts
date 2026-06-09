@@ -14,6 +14,7 @@ import { Route as TermsRouteImport } from './routes/terms'
 import { Route as SupportRouteImport } from './routes/support'
 import { Route as RefundRouteImport } from './routes/refund'
 import { Route as PrivacyRouteImport } from './routes/privacy'
+import { Route as NotificationsRouteImport } from './routes/notifications'
 import { Route as BookingsRouteImport } from './routes/bookings'
 import { Route as AccountRouteImport } from './routes/account'
 import { Route as IndexRouteImport } from './routes/index'
@@ -21,6 +22,7 @@ import { Route as ExpertIndexRouteImport } from './routes/expert.index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as TrackBookingIdRouteImport } from './routes/track.$bookingId'
 import { Route as PSlugRouteImport } from './routes/p.$slug'
+import { Route as InvoiceBookingIdRouteImport } from './routes/invoice.$bookingId'
 import { Route as BookServiceIdRouteImport } from './routes/book.$serviceId'
 import { Route as AuthSignupExpertRouteImport } from './routes/auth.signup-expert'
 import { Route as AuthSignupCustomerRouteImport } from './routes/auth.signup-customer'
@@ -49,6 +51,11 @@ const RefundRoute = RefundRouteImport.update({
 const PrivacyRoute = PrivacyRouteImport.update({
   id: '/privacy',
   path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NotificationsRoute = NotificationsRouteImport.update({
+  id: '/notifications',
+  path: '/notifications',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BookingsRoute = BookingsRouteImport.update({
@@ -86,6 +93,11 @@ const PSlugRoute = PSlugRouteImport.update({
   path: '/p/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const InvoiceBookingIdRoute = InvoiceBookingIdRouteImport.update({
+  id: '/invoice/$bookingId',
+  path: '/invoice/$bookingId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BookServiceIdRoute = BookServiceIdRouteImport.update({
   id: '/book/$serviceId',
   path: '/book/$serviceId',
@@ -111,6 +123,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/account': typeof AccountRoute
   '/bookings': typeof BookingsRoute
+  '/notifications': typeof NotificationsRoute
   '/privacy': typeof PrivacyRoute
   '/refund': typeof RefundRoute
   '/support': typeof SupportRoute
@@ -120,6 +133,7 @@ export interface FileRoutesByFullPath {
   '/auth/signup-customer': typeof AuthSignupCustomerRoute
   '/auth/signup-expert': typeof AuthSignupExpertRoute
   '/book/$serviceId': typeof BookServiceIdRoute
+  '/invoice/$bookingId': typeof InvoiceBookingIdRoute
   '/p/$slug': typeof PSlugRoute
   '/track/$bookingId': typeof TrackBookingIdRoute
   '/admin/': typeof AdminIndexRoute
@@ -129,6 +143,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/account': typeof AccountRoute
   '/bookings': typeof BookingsRoute
+  '/notifications': typeof NotificationsRoute
   '/privacy': typeof PrivacyRoute
   '/refund': typeof RefundRoute
   '/support': typeof SupportRoute
@@ -138,6 +153,7 @@ export interface FileRoutesByTo {
   '/auth/signup-customer': typeof AuthSignupCustomerRoute
   '/auth/signup-expert': typeof AuthSignupExpertRoute
   '/book/$serviceId': typeof BookServiceIdRoute
+  '/invoice/$bookingId': typeof InvoiceBookingIdRoute
   '/p/$slug': typeof PSlugRoute
   '/track/$bookingId': typeof TrackBookingIdRoute
   '/admin': typeof AdminIndexRoute
@@ -148,6 +164,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/account': typeof AccountRoute
   '/bookings': typeof BookingsRoute
+  '/notifications': typeof NotificationsRoute
   '/privacy': typeof PrivacyRoute
   '/refund': typeof RefundRoute
   '/support': typeof SupportRoute
@@ -157,6 +174,7 @@ export interface FileRoutesById {
   '/auth/signup-customer': typeof AuthSignupCustomerRoute
   '/auth/signup-expert': typeof AuthSignupExpertRoute
   '/book/$serviceId': typeof BookServiceIdRoute
+  '/invoice/$bookingId': typeof InvoiceBookingIdRoute
   '/p/$slug': typeof PSlugRoute
   '/track/$bookingId': typeof TrackBookingIdRoute
   '/admin/': typeof AdminIndexRoute
@@ -168,6 +186,7 @@ export interface FileRouteTypes {
     | '/'
     | '/account'
     | '/bookings'
+    | '/notifications'
     | '/privacy'
     | '/refund'
     | '/support'
@@ -177,6 +196,7 @@ export interface FileRouteTypes {
     | '/auth/signup-customer'
     | '/auth/signup-expert'
     | '/book/$serviceId'
+    | '/invoice/$bookingId'
     | '/p/$slug'
     | '/track/$bookingId'
     | '/admin/'
@@ -186,6 +206,7 @@ export interface FileRouteTypes {
     | '/'
     | '/account'
     | '/bookings'
+    | '/notifications'
     | '/privacy'
     | '/refund'
     | '/support'
@@ -195,6 +216,7 @@ export interface FileRouteTypes {
     | '/auth/signup-customer'
     | '/auth/signup-expert'
     | '/book/$serviceId'
+    | '/invoice/$bookingId'
     | '/p/$slug'
     | '/track/$bookingId'
     | '/admin'
@@ -204,6 +226,7 @@ export interface FileRouteTypes {
     | '/'
     | '/account'
     | '/bookings'
+    | '/notifications'
     | '/privacy'
     | '/refund'
     | '/support'
@@ -213,6 +236,7 @@ export interface FileRouteTypes {
     | '/auth/signup-customer'
     | '/auth/signup-expert'
     | '/book/$serviceId'
+    | '/invoice/$bookingId'
     | '/p/$slug'
     | '/track/$bookingId'
     | '/admin/'
@@ -223,6 +247,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AccountRoute: typeof AccountRoute
   BookingsRoute: typeof BookingsRoute
+  NotificationsRoute: typeof NotificationsRoute
   PrivacyRoute: typeof PrivacyRoute
   RefundRoute: typeof RefundRoute
   SupportRoute: typeof SupportRoute
@@ -232,6 +257,7 @@ export interface RootRouteChildren {
   AuthSignupCustomerRoute: typeof AuthSignupCustomerRoute
   AuthSignupExpertRoute: typeof AuthSignupExpertRoute
   BookServiceIdRoute: typeof BookServiceIdRoute
+  InvoiceBookingIdRoute: typeof InvoiceBookingIdRoute
   PSlugRoute: typeof PSlugRoute
   TrackBookingIdRoute: typeof TrackBookingIdRoute
   AdminIndexRoute: typeof AdminIndexRoute
@@ -273,6 +299,13 @@ declare module '@tanstack/react-router' {
       path: '/privacy'
       fullPath: '/privacy'
       preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/notifications': {
+      id: '/notifications'
+      path: '/notifications'
+      fullPath: '/notifications'
+      preLoaderRoute: typeof NotificationsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/bookings': {
@@ -324,6 +357,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/invoice/$bookingId': {
+      id: '/invoice/$bookingId'
+      path: '/invoice/$bookingId'
+      fullPath: '/invoice/$bookingId'
+      preLoaderRoute: typeof InvoiceBookingIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/book/$serviceId': {
       id: '/book/$serviceId'
       path: '/book/$serviceId'
@@ -359,6 +399,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AccountRoute: AccountRoute,
   BookingsRoute: BookingsRoute,
+  NotificationsRoute: NotificationsRoute,
   PrivacyRoute: PrivacyRoute,
   RefundRoute: RefundRoute,
   SupportRoute: SupportRoute,
@@ -368,6 +409,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthSignupCustomerRoute: AuthSignupCustomerRoute,
   AuthSignupExpertRoute: AuthSignupExpertRoute,
   BookServiceIdRoute: BookServiceIdRoute,
+  InvoiceBookingIdRoute: InvoiceBookingIdRoute,
   PSlugRoute: PSlugRoute,
   TrackBookingIdRoute: TrackBookingIdRoute,
   AdminIndexRoute: AdminIndexRoute,

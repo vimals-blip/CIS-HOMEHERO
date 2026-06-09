@@ -13,6 +13,6 @@ router.get('/:id', cacheMiddleware(120), asyncHandler(serviceController.getOne))
 // Admin
 router.post('/',      authMiddleware, requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(serviceController.create));
 router.patch('/:id',  authMiddleware, requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(serviceController.update));
-router.delete('/:id', authMiddleware, requireRole('SUPER_ADMIN'), asyncHandler(serviceController.delete));
+router.delete('/:id', authMiddleware, requireRole('ADMIN', 'SUPER_ADMIN'), asyncHandler(serviceController.delete));
 
 export default router;

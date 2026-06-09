@@ -71,7 +71,7 @@ An on-demand household services marketplace. Customers book trained, background-
 | Realtime | Socket.IO (+ Redis adapter for multi-instance) |
 | Queue | BullMQ + Redis (falls back to in-process `setTimeout`) |
 | Auth | JWT access token (15 min) + opaque refresh token (30 days, stored in DB) |
-| Payments | Razorpay (auto-mocked when keys are absent) |
+| Payments | Razorpay + Stripe (DB-configurable from Admin panel; auto-mocked when keys absent) |
 | File storage | Local disk `backend/uploads/` in dev; swap `storageProvider.js` for S3 in prod |
 | SMS OTP | MSG91 (primary) / Twilio (fallback) — both auto-mocked when keys absent |
 | Push | Firebase Cloud Messaging — auto-mocked when key absent |
@@ -204,8 +204,15 @@ All variables live in `backend/.env`. The app runs without most of them — prov
 | `ALLOWED_ORIGINS` | `http://localhost:8080` | CORS — set to your frontend domain(s) in prod |
 | `NODE_ENV` | _(unset)_ | Set to `production` to enforce JWT strength + strict CORS |
 | `REDIS_URL` | _(unset)_ | Enables BullMQ, Socket.IO Redis adapter, shared caching |
-| `RAZORPAY_KEY_ID` | _(unset)_ | Razorpay live/test key — payment mocked without this |
-| `RAZORPAY_KEY_SECRET` | _(unset)_ | Required together with `KEY_ID` |
+| `RAZORPAY_KEY_ID` | _(unset)_ | Razorpay env-var fallback (superseded by DB settings; see §6.8) |
+| `RAZORPAY_KEY_SECRET` | _(unset)_ | Razorpay env-var fallback |
+| `STRIPE_TEST_SECRET_KEY` | _(unset)_ | Stripe env-var fallback (superseded by DB settings) |
+| `STRIPE_TEST_PUBLISHABLE_KEY` | _(unset)_ | Stripe env-var fallback |
+| `STRIPE_LIVE_SECRET_KEY` | _(unset)_ | Stripe env-var fallback |
+| `STRIPE_LIVE_PUBLISHABLE_KEY` | _(unset)_ | Stripe env-var fallback |
+| `PAYMENT_GATEWAY` | `RAZORPAY` | Env-var fallback when DB setting `payment_gateway` is not set |
+| `PAYMENT_MODE` | `TEST` | Env-var fallback when DB setting `payment_mode` is not set |
+| `FRONTEND_URL` | `http://localhost:5173` | Used by Stripe to build redirect success/cancel URLs |
 | `MSG91_AUTH_KEY` | _(unset)_ | SMS OTP — mocked (console.log) without this |
 | `FIREBASE_SERVICE_ACCOUNT` | _(unset)_ | Push notifications — mocked without this |
 | `PUBLIC_BACKEND_URL` | _(unset)_ | Base URL for uploaded file links. Set to `https://api.yourdomain.com` in prod |
@@ -393,14 +400,39 @@ throw Forbidden();   // → 403
 
 ### 6.8 Providers — Mock → Real
 
-Every external service lives in a provider file that checks for credentials at startup and silently falls back to a mock. **No application code changes are needed to go live — just set the relevant env vars.**
+Every external service lives in a provider file that checks for credentials and silently falls back to a mock. **No application code changes are needed to go live.**
 
 | Provider | Real when | Mock behaviour |
 |---|---|---|
-| `providers/paymentProvider.js` | `RAZORPAY_KEY_ID` + `RAZORPAY_KEY_SECRET` set | Returns `order_mock_xxx` ID; `verifySignature` accepts `"mock_signature"` |
-| `providers/smsProvider.js` | `MSG91_AUTH_KEY` or `TWILIO_*` set | Logs the OTP to `console.log` |
+| `providers/paymentProvider.js` | Gateway configured in DB (Admin → Settings → Payment Gateway) or via env vars | Returns `order_mock_xxx` ID; accepts `"mock_signature"` for verification |
+| `providers/smsProvider.js` | `MSG91_AUTH_KEY` or `TWILIO_*` set in `.env` | Logs the OTP to `console.log` |
 | `providers/storageProvider.js` | `AWS_S3_BUCKET` set *(not yet wired in uploads.js)* | Saves to `backend/uploads/`, returns localhost URL |
-| `providers/fcmProvider.js` | `FIREBASE_SERVICE_ACCOUNT` set | Logs the notification to `console.log` |
+| `providers/fcmProvider.js` | `FIREBASE_SERVICE_ACCOUNT` set in `.env` | Logs the notification to `console.log` |
+
+#### Payment provider in depth
+
+`paymentProvider.js` supports **Razorpay** and **Stripe** and reads all configuration from the `settings` DB table (10-second in-process cache). Configuration hierarchy (first set wins):
+
+```
+DB settings table  →  env vars  →  mock mode
+```
+
+**DB keys** (managed via Admin → Settings → Payment Gateway, SUPER_ADMIN only):
+
+| Key | Purpose |
+|---|---|
+| `payment_gateway` | `RAZORPAY` or `STRIPE` |
+| `payment_mode` | `TEST` or `LIVE` |
+| `razorpay_test_key_id` / `razorpay_test_key_secret` | Razorpay test credentials |
+| `razorpay_live_key_id` / `razorpay_live_key_secret` | Razorpay live credentials |
+| `stripe_test_secret_key` / `stripe_test_publishable_key` | Stripe test credentials |
+| `stripe_live_secret_key` / `stripe_live_publishable_key` | Stripe live credentials |
+
+**Razorpay flow:** backend creates an order → frontend opens the Razorpay popup modal → user pays → frontend calls `POST /payments/verify` with `razorpay_order_id` + `razorpay_payment_id` + `razorpay_signature` → backend verifies HMAC-SHA256.
+
+**Stripe flow:** backend creates a Stripe Checkout Session → returns `checkout_url` → frontend redirects to Stripe's hosted page → Stripe redirects back to `/wallet?stripe_done=SESSION_ID` (wallet) or `/track/BOOKING_ID?stripe_done=SESSION_ID` (booking) → frontend auto-calls `POST /payments/verify` with `order_id = SESSION_ID` → backend fetches the session from Stripe API and checks `payment_status === 'paid'`.
+
+Calling `invalidateGatewayCache()` (done automatically on `POST /admin/payment-config`) busts the 10-second cache so changes take effect on the next request without a restart.
 
 ### 6.9 Booking Dispatch Service
 

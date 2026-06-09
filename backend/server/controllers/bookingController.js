@@ -48,6 +48,7 @@ function format(row) {
     platform_fee: Number(row.platform_fee),
     expert_amount: Number(row.expert_amount),
     total_amount: Number(row.total_amount),
+    discount_amount: Number(row.discount_amount ?? 0),
     expert_rating: row.expert_rating == null ? null : Number(row.expert_rating),
   };
 }
@@ -252,10 +253,11 @@ export const bookingController = {
       dispatchService.scheduleRetry(bookingId);
     }
 
-    // For online payments, create a gateway order so the frontend can open Razorpay checkout.
+    // For online payments, create a gateway order (Razorpay or Stripe).
     let gatewayOrder = null;
     if (payment_method === 'ONLINE' && total > 0) {
-      gatewayOrder = await paymentProvider.createOrder({ amount: total, receipt: `booking_${bookingId}` });
+      const origin = req.headers.origin || req.headers.referer || '';
+      gatewayOrder = await paymentProvider.createOrder({ amount: total, receipt: `booking_${bookingId}`, origin });
       await PaymentTxnModel.create({
         userId: req.user.id,
         bookingId,
@@ -273,11 +275,13 @@ export const bookingController = {
       total_amount: total,
       discount,
       ...(gatewayOrder && {
-        gateway_order_id: gatewayOrder.id,
-        gateway_amount:   gatewayOrder.amount,   // paise
-        gateway_currency: gatewayOrder.currency,
-        gateway_key_id:   gatewayOrder.key_id ?? null,
-        gateway_mock:     Boolean(gatewayOrder.mock),
+        gateway_order_id:    gatewayOrder.id,
+        gateway_amount:      gatewayOrder.amount,
+        gateway_currency:    gatewayOrder.currency,
+        gateway_key_id:      gatewayOrder.key_id      ?? null,
+        gateway_mock:        Boolean(gatewayOrder.mock),
+        gateway_provider:    gatewayOrder.provider    ?? 'MOCK',
+        gateway_checkout_url: gatewayOrder.checkout_url ?? null,
       }),
     });
   },

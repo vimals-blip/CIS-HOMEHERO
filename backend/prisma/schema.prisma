@@ -119,6 +119,7 @@ enum PaymentTxnPurpose {
 enum PaymentTxnProvider {
   MOCK
   RAZORPAY
+  STRIPE
 }
 
 enum PaymentRecordStatus {

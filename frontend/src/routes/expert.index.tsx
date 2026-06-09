@@ -1,8 +1,9 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
-import { Wallet, Briefcase, Star, TrendingUp, Wifi, WifiOff, MapPin, Clock, ShieldAlert, BanknoteArrowDown, Upload, CheckCircle2, XCircle, Clock3, FileUp, Loader2, Navigation, ChevronDown, ChevronUp, UserCircle } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Wallet, Briefcase, Star, TrendingUp, Wifi, WifiOff, MapPin, Clock, ShieldAlert, BanknoteArrowDown, Upload, CheckCircle2, XCircle, Clock3, FileUp, Loader2, Navigation, ChevronDown, ChevronUp, UserCircle, BellRing } from "lucide-react";
 import { apiFetch, uploadFile } from "@/lib/api";
+import { startBookingAlarm } from "@/lib/sound";
 import { getSocket } from "@/lib/socket";
 import { useAuth } from "@/lib/auth-context";
 import { LiveMap } from "@/components/booking/LiveMap";
@@ -52,6 +53,7 @@ function ExpertDashboard() {
   const [uploadingType, setUploadingType] = useState<string | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileForm, setProfileForm] = useState({ name: "", bio: "", experience_years: "", gender: "" });
+  const stopAlarmRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (!loading) {
@@ -128,6 +130,24 @@ function ExpertDashboard() {
     const timer = setInterval(emit, 10000);
     return () => clearInterval(timer);
   }, [user, role, isOnline, data?.expert?.status]);
+
+  // Ring alarm while any ASSIGNED job awaits acceptance; stop when cleared.
+  useEffect(() => {
+    const bookings = (data?.bookings ?? []) as any[];
+    const hasAssigned = bookings.some((b) => b.status === "ASSIGNED");
+    if (hasAssigned && !stopAlarmRef.current) {
+      stopAlarmRef.current = startBookingAlarm();
+    } else if (!hasAssigned && stopAlarmRef.current) {
+      stopAlarmRef.current();
+      stopAlarmRef.current = null;
+    }
+    return () => { /* cleanup on unmount handled below */ };
+  }, [data?.bookings]);
+
+  // Stop alarm when component unmounts.
+  useEffect(() => {
+    return () => { stopAlarmRef.current?.(); stopAlarmRef.current = null; };
+  }, []);
 
   const toggleStatus = useMutation({
     mutationFn: (status: string) => apiFetch(`/experts/${user!.id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
@@ -414,7 +434,14 @@ function ExpertDashboard() {
         </DialogContent>
       </Dialog>
 
-      <h2 className="mt-10 text-lg font-semibold">Active jobs</h2>
+      <h2 className="mt-10 flex items-center gap-2 text-lg font-semibold">
+        Active jobs
+        {activeJobs.some((j) => j.status === "ASSIGNED") && (
+          <span className="inline-flex animate-pulse items-center gap-1.5 rounded-full bg-amber-500/15 px-3 py-1 text-sm font-semibold text-amber-700">
+            <BellRing className="h-4 w-4" /> New booking — accept now!
+          </span>
+        )}
+      </h2>
       <div className="mt-3 space-y-3">
         {activeJobs.length === 0 ? (
           <EmptyState icon={Briefcase} title="No active jobs" description={currentOnline ? "You're online — new bookings will appear here." : "Go online to start receiving bookings."} />

@@ -10,7 +10,9 @@ import prisma from '../prisma.js';
 import bcrypt from 'bcryptjs';
 import { audit } from '../services/auditService.js';
 import { notify } from '../services/notificationService.js';
+import { emitToBooking } from '../realtime/io.js';
 import { BadRequest, Conflict, NotFound } from '../errors.js';
+import { invalidateGatewayCache } from '../providers/paymentProvider.js';
 
 export const adminController = {
   async getOverview(_req, res) {
@@ -55,6 +57,7 @@ export const adminController = {
     const users = await UserModel.findAll({
       limit: safeLimit, offset: (safePage - 1) * safeLimit,
       q: req.query.q, role: req.query.role,
+      is_blocked: req.query.is_blocked === 'true' ? true : undefined,
     });
     // findAll now joins profiles, so no N+1 per-user lookup needed.
     res.json(users.map((u) => ({
@@ -318,6 +321,49 @@ export const adminController = {
     });
   },
 
+  async getAvailableExperts(req, res) {
+    const { serviceId } = req.query;
+    const rows = await prisma.$queryRaw`
+      SELECT e.id, p.name, p.avatar_url, e.status, e.avg_rating, e.is_verified,
+        (SELECT COUNT(*) FROM bookings b WHERE b.expert_id = e.id AND b.status IN ('ASSIGNED','ACCEPTED','ON_THE_WAY','ARRIVED','IN_PROGRESS')) AS active_jobs
+      FROM experts e
+      JOIN profiles p ON p.id = e.id
+      LEFT JOIN expert_services es ON es.expert_id = e.id AND es.service_id = ${serviceId ?? ''}
+      WHERE e.status IN ('ONLINE','BUSY')
+        AND e.is_verified = 1
+        AND (${serviceId ?? ''} = '' OR es.service_id IS NOT NULL)
+      ORDER BY e.avg_rating DESC, active_jobs ASC
+      LIMIT 30
+    `;
+    res.json(rows.map(r => ({
+      id: r.id, name: r.name, avatar_url: r.avatar_url,
+      status: r.status, avg_rating: Number(r.avg_rating ?? 0),
+      active_jobs: Number(r.active_jobs ?? 0),
+    })));
+  },
+
+  async assignBooking(req, res) {
+    const { id } = req.params;
+    const { expert_id } = req.body;
+    if (!expert_id) throw BadRequest('MISSING_FIELD', 'expert_id is required.');
+
+    const booking = await BookingModel.findById(id);
+    if (!booking) throw NotFound('Booking not found.');
+    if (booking.status !== 'SEARCHING') throw BadRequest('NOT_SEARCHING', `Booking is ${booking.status}, not SEARCHING.`);
+
+    const expert = await ExpertModel.findById(expert_id);
+    if (!expert) throw NotFound('Expert not found.');
+
+    const eta = 6 + Math.floor(Math.random() * 9);
+    await BookingModel.assignExpert(id, expert_id, eta);
+    await BookingModel.addEvent(id, 'ASSIGNED', 'Expert manually assigned by admin.');
+    emitToBooking(id, 'booking_assigned', { status: 'ASSIGNED', eta_minutes: eta, expert_id });
+    await notify(booking.customer_id, { type: 'booking_assigned', title: 'Expert assigned', body: `Your expert is arriving in ~${eta} min.`, bookingId: id });
+    await notify(expert_id, { type: 'job_assigned', title: 'New job assigned', body: 'You have a new booking (admin assigned).', bookingId: id });
+
+    res.json({ ok: true, expert_id, eta_minutes: eta });
+  },
+
   async getReport(req, res) {
     const { type = 'revenue' } = req.query;
     const to = req.query.to ? new Date(req.query.to) : new Date();
@@ -396,5 +442,39 @@ export const adminController = {
     }
 
     res.json({ type, from: from.toISOString(), to: to.toISOString(), generated_at: new Date().toISOString(), data });
+  },
+
+  async getPaymentConfig(_req, res) {
+    const KEYS = [
+      'payment_gateway', 'payment_mode',
+      'razorpay_test_key_id',    'razorpay_test_key_secret',
+      'razorpay_live_key_id',    'razorpay_live_key_secret',
+      'stripe_test_secret_key',  'stripe_test_publishable_key',
+      'stripe_live_secret_key',  'stripe_live_publishable_key',
+    ];
+    const rows = await prisma.settings.findMany({ where: { setting_key: { in: KEYS } } });
+    const cfg  = Object.fromEntries(rows.map(r => [r.setting_key, r.setting_value ?? '']));
+    res.json(cfg);
+  },
+
+  async savePaymentConfig(req, res) {
+    const ALLOWED = [
+      'payment_gateway', 'payment_mode',
+      'razorpay_test_key_id',    'razorpay_test_key_secret',
+      'razorpay_live_key_id',    'razorpay_live_key_secret',
+      'stripe_test_secret_key',  'stripe_test_publishable_key',
+      'stripe_live_secret_key',  'stripe_live_publishable_key',
+    ];
+    const updates = req.body ?? {};
+    for (const [key, value] of Object.entries(updates)) {
+      if (!ALLOWED.includes(key)) continue;
+      await prisma.settings.upsert({
+        where:  { setting_key: key },
+        create: { setting_key: key, setting_value: String(value ?? ''), is_public: false },
+        update: { setting_value: String(value ?? '') },
+      });
+    }
+    invalidateGatewayCache();
+    res.json({ status: 'saved' });
   },
 };
