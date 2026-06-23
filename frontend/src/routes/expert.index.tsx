@@ -1,7 +1,7 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { Wallet, Briefcase, Star, TrendingUp, Wifi, WifiOff, MapPin, Clock, ShieldAlert, BanknoteArrowDown, Upload, CheckCircle2, XCircle, Clock3, FileUp, Loader2, Navigation, ChevronDown, ChevronUp, UserCircle, BellRing, ChevronLeft, ChevronRight, Lock, ShieldCheck } from "lucide-react";
+import { Wallet, Briefcase, Star, TrendingUp, Wifi, WifiOff, MapPin, Clock, ShieldAlert, BanknoteArrowDown, Upload, CheckCircle2, XCircle, Clock3, FileUp, Loader2, Navigation, ChevronDown, ChevronUp, UserCircle, BellRing, ChevronLeft, ChevronRight, Lock, ShieldCheck, MessageSquare } from "lucide-react";
 import { apiFetch, uploadFile } from "@/lib/api";
 import { startBookingAlarm } from "@/lib/sound";
 import { getSocket } from "@/lib/socket";
@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { AnimatedCounter } from "@/components/shared/AnimatedCounter";
 import { playUISound } from "@/lib/sound-ui";
+import { ChatDrawer } from "@/components/chat/ChatDrawer";
 
 const WITHDRAWAL_PILL: Record<string, string> = {
   REQUESTED: "bg-amber-500/12 text-amber-700",
@@ -56,6 +57,17 @@ function ExpertDashboard() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileForm, setProfileForm] = useState({ name: "", bio: "", experience_years: "", gender: "" });
   const [historyPage, setHistoryPage] = useState(1);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatRecipientId, setChatRecipientId] = useState<string | null>(null);
+  const [chatRecipientName, setChatRecipientName] = useState("");
+  const [chatBookingId, setChatBookingId] = useState<string | null>(null);
+
+  const handleChatOpen = (customerId: string, customerName: string, bookingId: string) => {
+    setChatRecipientId(customerId);
+    setChatRecipientName(customerName);
+    setChatBookingId(bookingId);
+    setChatOpen(true);
+  };
   const historyItemsPerPage = 5;
   const stopAlarmRef = useRef<(() => void) | null>(null);
 
@@ -668,6 +680,10 @@ function ExpertDashboard() {
                           <div className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">Your Net Payout</div>
                         </div>
                         <div className="mt-4 flex flex-wrap gap-2 w-full justify-start sm:justify-end">
+                          <Button size="sm" variant="secondary" className="font-bold text-primary bg-primary/10 hover:bg-primary/20 border-0"
+                            onClick={() => handleChatOpen(j.customer_id, j.customer_name, j.id)}>
+                            <MessageSquare className="mr-1.5 h-4 w-4" /> Chat
+                          </Button>
                           {["ASSIGNED", "ACCEPTED"].includes(j.status) && (
                             <Button size="sm" variant="outline" className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 font-bold" disabled={reject.isPending}
                               onClick={() => reject.mutate(j.id)}>
@@ -795,6 +811,15 @@ function ExpertDashboard() {
           )}
         </div>
       )}
+
+      <ChatDrawer 
+        open={chatOpen} 
+        onOpenChange={setChatOpen} 
+        recipientId={chatRecipientId} 
+        recipientName={chatRecipientName} 
+        type="BOOKING" 
+        bookingId={chatBookingId} 
+      />
     </div>
   );
 }

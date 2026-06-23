@@ -6,7 +6,7 @@ import {
   CheckCircle2, XCircle, Plus, RefreshCw, Search, IndianRupee,
   Star, BookOpen, Circle, AlertCircle, Wallet, LifeBuoy, Settings as SettingsIcon, Send, ArrowLeft,
   ScrollText, KeyRound, FileText, ExternalLink, Trash2, Pencil, BarChart2, BellRing,
-  ImageIcon, Upload, Loader2, X, MapPin,
+  ImageIcon, Upload, Loader2, X, MapPin, MessageSquare,
 } from "lucide-react";
 import { startBookingAlarm } from "@/lib/sound";
 import {
@@ -26,6 +26,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { ChatDrawer } from "@/components/chat/ChatDrawer";
 
 export const Route = createFileRoute("/admin/")({
   head: () => ({ meta: [{ title: "Admin — HomeHero" }] }),
@@ -138,6 +139,19 @@ function AdminDashboard() {
   const isSuperAdmin = role === "SUPER_ADMIN";
   const router = useRouter();
   const qc = useQueryClient();
+
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatRecipientId, setChatRecipientId] = useState<string | null>(null);
+  const [chatRecipientName, setChatRecipientName] = useState("");
+  const [chatBookingId, setChatBookingId] = useState<string | null>(null);
+
+  const handleChatOpen = (userId: string, userName: string, bookingId: string | null = null) => {
+    setChatRecipientId(userId);
+    setChatRecipientName(userName);
+    setChatBookingId(bookingId);
+    setChatOpen(true);
+  };
+
   const [section, setSection] = useState<Section>("overview");
   const [kycQ, setKycQ] = useState("");
   const [kycTab, setKycTab] = useState<"pending" | "rejected" | "all">("pending");
@@ -1113,6 +1127,10 @@ function AdminDashboard() {
                       <div className="flex items-center justify-between border-t pt-3">
                         <span className="text-[11px] text-muted-foreground">Joined {userDetail.created_at ? new Date(userDetail.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}</span>
                         <div className="flex gap-2">
+                          <Button size="sm" variant="secondary" className="h-8 text-xs font-bold text-primary"
+                            onClick={() => handleChatOpen(userDetail.id, userDetail.profile?.name ?? userDetail.email)}>
+                            <MessageSquare className="mr-1 h-3.5 w-3.5" /> Chat
+                          </Button>
                           <Button size="sm" variant="outline" className="h-8 text-xs"
                             onClick={() => { if (confirm("Generate a new temporary password for this user?")) resetPassword.mutate(); }} disabled={resetPassword.isPending}>
                             <KeyRound className="mr-1 h-3.5 w-3.5" /> Reset password
@@ -2074,6 +2092,15 @@ function AdminDashboard() {
           )}
         </DialogContent>
       </Dialog>
+
+      <ChatDrawer 
+        open={chatOpen} 
+        onOpenChange={setChatOpen} 
+        recipientId={chatRecipientId} 
+        recipientName={chatRecipientName} 
+        type="SUPPORT" 
+        bookingId={chatBookingId} 
+      />
     </div>
   );
 }

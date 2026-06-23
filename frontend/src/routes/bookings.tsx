@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { 
   Inbox, ArrowRight, Clock, Zap, CalendarClock, MapPin, Star,
-  ChevronLeft, ChevronRight, AlertCircle, Sparkles, Receipt, ChevronDown
+  ChevronLeft, ChevronRight, AlertCircle, Sparkles, Receipt, ChevronDown, MessageSquare
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -16,6 +16,7 @@ import { serviceIcon } from "@/lib/icons";
 import { cn } from "@/lib/utils";
 import { AnimatedCounter } from "@/components/shared/AnimatedCounter";
 import { playUISound } from "@/lib/sound-ui";
+import { ChatDrawer } from "@/components/chat/ChatDrawer";
 
 export const Route = createFileRoute("/bookings")({
   head: () => ({ meta: [{ title: "My Bookings — HomeHero" }] }),
@@ -45,6 +46,18 @@ function BookingsPage() {
   const [page, setPage] = useState(1);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const itemsPerPage = 5;
+
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatRecipientId, setChatRecipientId] = useState<string | null>(null);
+  const [chatRecipientName, setChatRecipientName] = useState("");
+  const [chatBookingId, setChatBookingId] = useState<string | null>(null);
+
+  const handleChatOpen = (expertId: string, expertName: string, bookingId: string) => {
+    setChatRecipientId(expertId);
+    setChatRecipientName(expertName);
+    setChatBookingId(bookingId);
+    setChatOpen(true);
+  };
 
   useEffect(() => { 
     if (!loading && !user) router.navigate({ to: "/auth/login" }); 
@@ -310,6 +323,19 @@ function BookingsPage() {
                       </div>
 
                       <div className="flex flex-wrap gap-2 pt-2 justify-end">
+                        {isActive && b.expert_id && (
+                          <Button 
+                            size="sm" 
+                            variant="secondary" 
+                            className="h-8 text-[11px] font-bold text-primary bg-primary/10 hover:bg-primary/20 border-0" 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleChatOpen(b.expert_id, b.expert_name, b.id);
+                            }}
+                          >
+                            <MessageSquare className="mr-1.5 h-3.5 w-3.5" /> Chat
+                          </Button>
+                        )}
                         {b.status === "COMPLETED" && (
                           <Button size="sm" variant="outline" className="h-8 text-[11px] font-bold" onClick={() => window.open(`/invoice/${b.id}`, "_blank")}>
                             <Receipt className="mr-1.5 h-3.5 w-3.5" /> Invoice
@@ -361,6 +387,15 @@ function BookingsPage() {
           </div>
         )}
       </div>
+
+      <ChatDrawer 
+        open={chatOpen} 
+        onOpenChange={setChatOpen} 
+        recipientId={chatRecipientId} 
+        recipientName={chatRecipientName} 
+        type="BOOKING" 
+        bookingId={chatBookingId} 
+      />
     </div>
   );
 }

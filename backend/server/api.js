@@ -27,6 +27,7 @@ import notificationRoutes from './routes/notifications.js';
 import adminRoutes from './routes/admin.js';
 import uploadRoutes, { UPLOAD_ROOT } from './routes/uploads.js';
 import aiRoutes from './routes/ai.js';
+import chatRoutes from './routes/chat.js';
 
 dotenv.config({ path: new URL('../.env', import.meta.url).pathname });
 
@@ -88,8 +89,9 @@ app.use(`${BASE}/notifications`, notificationRoutes);
 app.use(`${BASE}/admin`, adminRoutes);
 app.use(`${BASE}/uploads`, uploadRoutes);
 app.use(`${BASE}/ai`, aiRoutes);
+app.use(`${BASE}/chat`, chatRoutes);
 
-// Global error handler — must be last
+// Strict 404 handler for API routes to prevent falling through to generic HTML
 app.use(errorHandler);
 
 const port = Number(process.env.API_PORT || process.env.PORT || 4001);

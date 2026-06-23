@@ -511,3 +511,33 @@ model ai_interactions {
 
   @@index([created_at])
 }
+
+model conversations {
+  id         String   @id @default(uuid()) @db.VarChar(50)
+  type       String   @db.VarChar(20) // "BOOKING" or "SUPPORT"
+  booking_id String?  @db.VarChar(50)
+  user1_id   String   @db.VarChar(50) // Customer or Admin ID
+  user2_id   String   @db.VarChar(50) // Expert ID
+  created_at DateTime @default(now()) @db.DateTime(0)
+  updated_at DateTime @updatedAt @db.DateTime(0)
+
+  messages messages[]
+
+  @@index([user1_id])
+  @@index([user2_id])
+  @@index([booking_id])
+}
+
+model messages {
+  id              String   @id @default(uuid()) @db.VarChar(50)
+  conversation_id String   @db.VarChar(50)
+  sender_id       String   @db.VarChar(50)
+  content         String   @db.Text
+  is_read         Boolean  @default(false)
+  created_at      DateTime @default(now()) @db.DateTime(0)
+
+  conversation conversations @relation(fields: [conversation_id], references: [id])
+
+  @@index([conversation_id])
+  @@index([sender_id])
+}
