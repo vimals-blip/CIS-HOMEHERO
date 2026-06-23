@@ -558,7 +558,7 @@ function AdminDashboard() {
     <div className="flex min-h-[calc(100vh-4rem)]">
       <Sidebar active={section} onChange={setSection} data={data} isSuperAdmin={isSuperAdmin} />
       <div className="flex-1 overflow-auto">
-        <div className="mx-auto max-w-6xl px-6 py-8">
+        <div className="mx-auto max-w-[1600px] px-6 py-8">
 
           {section === "overview" && (
             <div className="space-y-8">
@@ -1568,7 +1568,19 @@ function AdminDashboard() {
                         {(settings as any[]).map((s) => (
                           <tr key={s.setting_key} className="border-t">
                             <td className="px-5 py-3 font-mono text-xs">{s.setting_key}</td>
-                            <td className="px-5 py-3"><Input className="h-8" defaultValue={s.setting_value} onChange={(e) => setSettingEdits({ ...settingEdits, [s.setting_key]: e.target.value })} /></td>
+                            <td className="px-5 py-3">
+                              <div className="flex items-center gap-2">
+                                {(s.setting_key === "global_theme_background" || s.setting_key === "global_theme_glass_bg" || s.setting_key === "global_primary_color") && (
+                                  <input 
+                                    type="color" 
+                                    className="h-8 w-10 cursor-pointer rounded border border-border bg-background p-0.5"
+                                    value={settingEdits[s.setting_key] ?? s.setting_value}
+                                    onChange={(e) => setSettingEdits({ ...settingEdits, [s.setting_key]: e.target.value })}
+                                  />
+                                )}
+                                <Input className="h-8" value={settingEdits[s.setting_key] ?? s.setting_value} onChange={(e) => setSettingEdits({ ...settingEdits, [s.setting_key]: e.target.value })} />
+                              </div>
+                            </td>
                             <td className="px-5 py-3">{s.is_public ? "Yes" : "No"}</td>
                             <td className="px-5 py-3 text-right"><Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => saveSetting.mutate({ key: s.setting_key, value: settingEdits[s.setting_key] ?? s.setting_value, is_public: Boolean(s.is_public) })}>Save</Button></td>
                           </tr>

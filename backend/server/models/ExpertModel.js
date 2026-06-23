@@ -93,6 +93,39 @@ export const ExpertModel = {
 
   async setStatus(id, status) {
     await prisma.experts.update({ where: { id }, data: { status } });
+    if (status === 'ONLINE') {
+      // Immediately dispatch any SEARCHING bookings that match this expert's services.
+      // This is critical: when an expert was offline during booking, the retry queue
+      // may have exhausted its attempts. We must re-dispatch immediately — no delay.
+      (async () => {
+        try {
+          const serviceIds = await ExpertModel.getServiceIds(id);
+          if (!serviceIds || serviceIds.length === 0) return;
+
+          const searchingBookings = await prisma.bookings.findMany({
+            where: {
+              status: 'SEARCHING',
+              service_id: { in: serviceIds },
+            },
+            select: { id: true },
+            orderBy: { created_at: 'asc' }, // oldest bookings first (FIFO fairness)
+          });
+
+          if (searchingBookings.length > 0) {
+            console.log(`[dispatch] Expert ${id} came ONLINE — ${searchingBookings.length} SEARCHING booking(s) found, dispatching immediately.`);
+            const { dispatchService } = await import('../services/dispatchService.js');
+            for (const b of searchingBookings) {
+              // dispatchImmediate runs the assign logic synchronously (no 8s delay).
+              // Once the first booking grabs this expert, subsequent ones will find
+              // no candidates and fall through gracefully.
+              await dispatchService.dispatchImmediate(b.id);
+            }
+          }
+        } catch (err) {
+          console.error('[dispatch] Failed to trigger dispatches for newly online expert:', err);
+        }
+      })();
+    }
   },
 
   async setLocation(id, lat, lng) {

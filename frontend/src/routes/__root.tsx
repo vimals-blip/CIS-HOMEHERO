@@ -1,4 +1,5 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import { apiFetch } from "@/lib/api";
 import {
   Outlet,
   createRootRouteWithContext,
@@ -66,7 +67,12 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { title: "HomeHero — Trusted home services on demand" },
       { name: "description", content: "Book verified cleaners, plumbers, electricians and more at your doorstep." },
     ],
-    links: [{ rel: "stylesheet", href: appCss }],
+    links: [
+      { rel: "preconnect", href: "https://fonts.googleapis.com" },
+      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "" },
+      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" },
+      { rel: "stylesheet", href: appCss },
+    ],
   }),
   shellComponent: RootShell,
   component: RootComponent,
@@ -77,9 +83,85 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 function RootShell({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <head><HeadContent /></head>
+      <head>
+        <HeadContent />
+        <script dangerouslySetInnerHTML={{ __html: `
+          (function() {
+            const stored = localStorage.getItem('theme');
+            if (stored === 'dark' || (!stored && true)) {
+              document.documentElement.classList.add('dark');
+            } else {
+              document.documentElement.classList.remove('dark');
+            }
+          })();
+        ` }} />
+      </head>
       <body>{children}<Scripts /></body>
     </html>
+  );
+}
+
+function GlobalStyles() {
+  const { data } = useQuery({
+    queryKey: ["public-settings-bg-controls"],
+    queryFn: () => apiFetch("/cms/settings"),
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const bgUrl = data?.global_background_image_url;
+  const primaryColor = data?.global_primary_color;
+  const themeBackground = data?.global_theme_background;
+  const themeGlassBg = data?.global_theme_glass_bg;
+  
+  const glassOpacityPct = data?.global_glass_opacity || "85";
+  const bgBlurPx = data?.global_bg_blur || "8";
+
+  // Build root variables string
+  let rootVars = "";
+  if (primaryColor) rootVars += `--primary: ${primaryColor} !important;\n`;
+  if (themeBackground) rootVars += `--background: ${themeBackground} !important;\n`;
+  if (themeGlassBg) rootVars += `--glass-bg: ${themeGlassBg} !important;\n`;
+
+  return (
+    <>
+      {rootVars && (
+        <style dangerouslySetInnerHTML={{ __html: `:root:not(.dark) { ${rootVars} }` }} />
+      )}
+      {bgUrl && (
+        <div
+          className="fixed inset-0 z-[-50] bg-cover bg-center transition-all duration-1000"
+          style={{
+            backgroundImage: `url(${bgUrl})`,
+            filter: `blur(${bgBlurPx}px) brightness(0.9)`,
+            transform: "scale(1.05)",
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+function AppLayout() {
+  const { data } = useQuery({
+    queryKey: ["public-settings-bg-controls"],
+    queryFn: () => apiFetch("/cms/settings"),
+    staleTime: 1000 * 60 * 5,
+  });
+  const glassOpacityPct = data?.global_glass_opacity || "85";
+
+  return (
+    <div className="flex min-h-screen flex-col">
+      <Navbar />
+      <main className="flex-1 relative z-0 container mx-auto px-4 py-8">
+        <div 
+          className="rounded-3xl backdrop-blur-2xl shadow-2xl ring-1 ring-border/50 min-h-[70vh] overflow-hidden transition-all duration-500"
+          style={{ backgroundColor: `color-mix(in srgb, var(--glass-bg) ${glassOpacityPct}%, transparent)` }}
+        >
+          <Outlet />
+        </div>
+      </main>
+      <Footer />
+    </div>
   );
 }
 
@@ -88,13 +170,8 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <div className="flex min-h-screen flex-col">
-          <Navbar />
-          <main className="flex-1">
-            <Outlet />
-          </main>
-          <Footer />
-        </div>
+        <GlobalStyles />
+        <AppLayout />
         <Toaster richColors position="top-right" />
       </AuthProvider>
     </QueryClientProvider>

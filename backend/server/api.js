@@ -26,6 +26,7 @@ import cmsRoutes from './routes/cms.js';
 import notificationRoutes from './routes/notifications.js';
 import adminRoutes from './routes/admin.js';
 import uploadRoutes, { UPLOAD_ROOT } from './routes/uploads.js';
+import aiRoutes from './routes/ai.js';
 
 dotenv.config({ path: new URL('../.env', import.meta.url).pathname });
 
@@ -86,6 +87,7 @@ app.use(`${BASE}/cms`, cmsRoutes);
 app.use(`${BASE}/notifications`, notificationRoutes);
 app.use(`${BASE}/admin`, adminRoutes);
 app.use(`${BASE}/uploads`, uploadRoutes);
+app.use(`${BASE}/ai`, aiRoutes);
 
 // Global error handler — must be last
 app.use(errorHandler);

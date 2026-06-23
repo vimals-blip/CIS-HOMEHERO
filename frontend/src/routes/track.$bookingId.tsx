@@ -70,8 +70,14 @@ function TrackBooking() {
     enabled: !!user,
     queryKey: ["booking", bookingId],
     queryFn: () => apiFetch(`/bookings/${bookingId}`),
-    // Polling is a fallback; the socket pushes updates in real time.
-    refetchInterval: (q) => (ACTIVE.includes((q.state.data as any)?.status) ? 15000 : false),
+    // Poll faster while SEARCHING (5s) since the expert may come online any moment.
+    // Other active statuses poll at 15s as a fallback; socket pushes arrive instantly.
+    refetchInterval: (q) => {
+      const st = (q.state.data as any)?.status;
+      if (st === "SEARCHING") return 5000;
+      if (ACTIVE.includes(st)) return 15000;
+      return false;
+    },
   });
 
   // Seed initial expert position from the booking's stored current_lat/lng so the
@@ -101,6 +107,11 @@ function TrackBooking() {
     const sub = () => socket.emit("subscribe_booking", bookingId, () => {});
     if (socket.connected) sub(); else socket.once("connect", sub);
 
+    // Re-subscribe + refetch after reconnection (network drop, phone wake, etc.)
+    // The assignment event may have been emitted while the socket was disconnected.
+    const onReconnect = () => { sub(); refetch(); };
+    socket.on("connect", onReconnect);
+
     socket.on("booking_assigned", onAssigned);
     socket.on("booking_status_updated", onStatus);
     socket.on("payment_success", refetch);
@@ -109,6 +120,7 @@ function TrackBooking() {
 
     return () => {
       socket.emit("unsubscribe_booking", bookingId);
+      socket.off("connect", onReconnect);
       socket.off("booking_assigned", onAssigned);
       socket.off("booking_status_updated", onStatus);
       socket.off("payment_success", refetch);
@@ -138,7 +150,7 @@ function TrackBooking() {
                     && (expertLoc || (booking.lat && booking.lng));
 
   return (
-    <div className="container mx-auto max-w-3xl px-4 py-8">
+    <div className="container mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-8">
 
       {/* Back link — admin goes to admin panel, others go to /bookings */}
       {isAdmin ? (

@@ -208,7 +208,7 @@ function SignupExpert() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-muted/40 to-background">
-      <div className="container mx-auto max-w-2xl px-4 py-12">
+      <div className="container mx-auto max-w-3xl px-4 py-12">
 
         {/* Header */}
         <div className="text-center mb-10">

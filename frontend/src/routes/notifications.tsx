@@ -57,7 +57,7 @@ function NotificationsPage() {
   );
 
   return (
-    <div className="container mx-auto max-w-2xl px-4 py-10">
+    <div className="container mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-10">
       {/* Header */}
       <div className="flex items-center gap-3">
         <button onClick={() => router.history.back()} className="grid h-9 w-9 place-items-center rounded-xl hover:bg-muted text-muted-foreground">

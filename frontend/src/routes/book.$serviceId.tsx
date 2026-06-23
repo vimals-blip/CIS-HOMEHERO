@@ -1,8 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { Zap, CalendarClock, MapPin, Plus, Check, Tag, Wallet, Banknote, CreditCard, X, ChevronDown, ChevronUp, Star, Briefcase, LocateFixed, Loader2 } from "lucide-react";
+import { Zap, CalendarClock, MapPin, Plus, Check, Tag, Wallet, Banknote, CreditCard, X, ChevronDown, ChevronUp, Star, Briefcase, LocateFixed, Loader2, Sparkles } from "lucide-react";
+import { playUISound } from "@/lib/sound-ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,6 +14,7 @@ import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { serviceIcon } from "@/lib/icons";
 import { cn } from "@/lib/utils";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/book/$serviceId")({
   head: () => ({ meta: [{ title: "Book a service — HomeHero" }] }),
@@ -69,6 +71,37 @@ function BookService() {
   const [saveNewAddr, setSaveNewAddr] = useState(false);
   const [newAddrLabel, setNewAddrLabel] = useState("Home");
   const [locating, setLocating] = useState(false);
+  const [showOfflineWarning, setShowOfflineWarning] = useState(false);
+
+  // AI Booking Assistant State & Mutation
+  const [aiDesc, setAiDesc] = useState("");
+  const [aiAnalysis, setAiAnalysis] = useState<any>(null);
+
+  const runAiDiagnostic = useMutation({
+    mutationFn: async () => {
+      if (!aiDesc.trim()) {
+        toast.error("Please describe your job requirements for the AI to analyze");
+        return null;
+      }
+      return apiFetch("/ai/diagnostic/analyze", {
+        method: "POST",
+        body: JSON.stringify({ description: aiDesc, service_id: serviceId })
+      });
+    },
+    onSuccess: (data: any) => {
+      if (!data) return;
+      playUISound("success");
+      setAiAnalysis(data);
+      setDurationUnit("hours");
+      setDurationValue(data.recommended_hours);
+      setNotes(`AI Scope Diagnosis: Severity ${data.severity}. ${aiDesc}`);
+      toast.success(`AI Diagnostic complete! Recommended duration: ${data.recommended_hours} hours.`);
+    },
+    onError: (err: any) => {
+      playUISound("warning");
+      toast.error(err.message ?? "AI diagnostic calculation failed");
+    }
+  });
 
   const { data: service, isLoading } = useQuery({
     queryKey: ["service", serviceId],
@@ -93,10 +126,17 @@ function BookService() {
     queryFn: () => apiFetch(`/experts?service_id=${serviceId}&limit=20`),
   });
 
+  const { data: surgeData } = useQuery({
+    queryKey: ["surge-check", serviceId],
+    queryFn: () => apiFetch(`/bookings/surge-check?service_id=${serviceId}`),
+    refetchInterval: 30000,
+  });
+
   // Compute base price before early returns so the useEffect below is always called
   // (React requires all hooks to run on every render regardless of loading state).
   const totalHours = durationUnit === "days" ? durationValue * HRS_PER_DAY : durationValue;
-  const base = Number((service as any)?.rate_per_hour ?? 0) * totalHours;
+  const surgeMultiplier = surgeData?.multiplier ?? 1.0;
+  const base = Number((service as any)?.rate_per_hour ?? 0) * surgeMultiplier * totalHours;
 
   // Re-validate applied coupon silently when base amount changes.
   useEffect(() => {
@@ -181,14 +221,24 @@ function BookService() {
     );
   };
 
-  const confirm = async () => {
+  const selectedExpert = preferredExpertId ? (availableExperts as any[]).find((e) => e.id === preferredExpertId) : null;
+
+  const confirm = async (forceWaitOffline: boolean | React.MouseEvent = false) => {
+    const isForceWait = typeof forceWaitOffline === 'boolean' ? forceWaitOffline : false;
+
     if (!user) { toast.error("Please log in to book"); navigate({ to: "/auth/login" }); return; }
     if (type === "SCHEDULED" && !scheduledAt) { toast.error("Pick a date and time"); return; }
     if (walletShort) { toast.error("Insufficient wallet balance — top up or pay with cash"); return; }
+    
+    if (selectedExpert && selectedExpert.status === 'OFFLINE' && !isForceWait) {
+      setShowOfflineWarning(true);
+      return;
+    }
 
     let body: any = {
       service_id: serviceId, duration_hours: totalHours, booking_type: type,
       payment_method: paymentMethod, coupon_code: coupon?.code ?? null, notes: notes.trim() || null,
+      wait_for_offline_expert: isForceWait,
     };
     if (type === "SCHEDULED") body.scheduled_at = scheduledAt + ":00";
     if (preferredExpertId) body.preferred_expert_id = preferredExpertId;
@@ -280,10 +330,10 @@ function BookService() {
     }
   };
 
-  const selectedExpert = preferredExpertId ? (availableExperts as any[]).find((e) => e.id === preferredExpertId) : null;
+
 
   return (
-    <div className="container mx-auto max-w-5xl px-4 py-8">
+    <div className="container mx-auto max-w-7xl px-4 py-8">
       <div className="relative overflow-hidden rounded-3xl border bg-muted">
         {service.image_url && <img src={service.image_url} alt={service.name} className="h-40 w-full object-cover sm:h-52" />}
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
@@ -331,9 +381,94 @@ function BookService() {
             )}
           </div>
 
+          {/* AI Scope Assistant */}
+          <div className="rounded-2xl border bg-card p-5 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-primary/10 rounded-full blur-2xl pointer-events-none" />
+            <div className="flex items-center justify-between">
+              <Step n={2} title="AI Job Scope Assistant (Recommended)" hint="Let AI calculate the time and tools needed for your task" />
+              <Sparkles className="h-5 w-5 text-primary animate-pulse" />
+            </div>
+            
+            <div className="mt-4 space-y-4">
+              <div>
+                <Label htmlFor="ai-desc" className="text-xs font-semibold text-muted-foreground">Describe your problem in plain language</Label>
+                <Textarea 
+                  id="ai-desc" 
+                  value={aiDesc}
+                  onChange={(e) => setAiDesc(e.target.value)}
+                  placeholder="Example: My kitchen sink is leaking heavily from the pipe underneath, causing water pooling on the kitchen floor. Need to patch it."
+                  rows={3}
+                  className="mt-1 bg-muted/20 border-border/80 focus:border-primary"
+                />
+              </div>
+
+              <Button
+                type="button"
+                onClick={() => runAiDiagnostic.mutate()}
+                disabled={runAiDiagnostic.isPending}
+                variant="outline"
+                className="w-full border-primary/40 bg-primary/5 hover:bg-primary/10 font-bold h-11 text-xs transition-all"
+              >
+                {runAiDiagnostic.isPending ? (
+                  <>
+                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin text-primary shrink-0" />
+                    Analyzing Scope...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="mr-1.5 h-4 w-4 text-primary shrink-0" />
+                    Estimate Duration & Required Tools
+                  </>
+                )}
+              </Button>
+
+              {aiAnalysis && (
+                <div className="mt-4 p-4 rounded-2xl bg-muted/40 border border-border/50 space-y-3.5 text-xs transition-all duration-300">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-foreground">AI Diagnostic Summary:</span>
+                    <span className={cn(
+                      "rounded-full px-2.5 py-0.5 text-[10px] font-bold border uppercase tracking-wider",
+                      aiAnalysis.severity === "HIGH" && "bg-rose-500/10 text-rose-500 border-rose-500/20 animate-pulse",
+                      aiAnalysis.severity === "MEDIUM" && "bg-amber-500/10 text-amber-500 border-amber-500/20",
+                      aiAnalysis.severity === "LOW" && "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+                    )}>
+                      {aiAnalysis.severity} Severity Risk
+                    </span>
+                  </div>
+
+                  <div className="grid gap-3 grid-cols-2">
+                    <div className="bg-card p-3 rounded-xl border">
+                      <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Recommended Duration</div>
+                      <div className="text-sm font-extrabold text-primary mt-1">{aiAnalysis.recommended_hours} Hours</div>
+                      <p className="text-[9px] text-muted-foreground mt-0.5 font-medium">Applied to Step 3 selection</p>
+                    </div>
+
+                    <div className="bg-card p-3 rounded-xl border">
+                      <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Expert Experience</div>
+                      <div className="text-sm font-extrabold text-foreground mt-1">{aiAnalysis.expert_match_criteria.min_experience_years}+ Years</div>
+                      <p className="text-[9px] text-muted-foreground mt-0.5 font-medium">Auto-filtering matching feed</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">Required Tools & Materials:</span>
+                    <div className="grid gap-1.5 grid-cols-1 sm:grid-cols-2">
+                      {aiAnalysis.tools.map((tool: string, idx: number) => (
+                        <div key={idx} className="flex items-center gap-1.5 text-muted-foreground font-medium">
+                          <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                          <span>{tool}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Duration */}
           <div className="rounded-2xl border bg-card p-5">
-            <Step n={2} title="How long do you need?" />
+            <Step n={3} title="How long do you need?" />
             <div className="mt-4 inline-flex rounded-xl border bg-muted p-1 gap-1">
               {(["hours", "days"] as const).map((u) => (
                 <button
@@ -371,7 +506,7 @@ function BookService() {
 
           {/* Address */}
           <div className="rounded-2xl border bg-card p-5">
-            <Step n={3} title="Service address" />
+            <Step n={4} title="Service address" />
             <div className="mt-4 space-y-2">
               {(addresses as any[]).map((a) => (
                 <button key={a.id} onClick={() => { setSelectedAddr(a.id); setShowNewAddr(false); }} className={cn(
@@ -430,7 +565,7 @@ function BookService() {
           <div className="rounded-2xl border bg-card p-5">
             <button onClick={() => setShowExperts((v) => !v)} className="flex w-full items-center justify-between">
               <div className="flex items-center gap-2">
-                <Step n={4} title="Choose your expert (optional)" hint="Skip to let us assign the best available" />
+                <Step n={5} title="Choose your expert (optional)" hint="Skip to let us assign the best available" />
               </div>
               {showExperts ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
             </button>
@@ -456,7 +591,12 @@ function BookService() {
                     )}>
                       <Avatar src={e.avatar_url} name={e.name} size={40} />
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-semibold">{e.name ?? "Expert"}</div>
+                        <div className="flex items-center gap-2">
+                          <div className="text-sm font-semibold">{e.name ?? "Expert"}</div>
+                          {e.status === 'ONLINE' && <div className="h-2 w-2 rounded-full bg-green-500" title="Online" />}
+                          {e.status === 'OFFLINE' && <div className="h-2 w-2 rounded-full bg-muted-foreground" title="Offline" />}
+                          {e.status === 'BUSY' && <div className="h-2 w-2 rounded-full bg-amber-500" title="Busy" />}
+                        </div>
                         <div className="flex items-center gap-3 text-xs text-muted-foreground">
                           <span className="flex items-center gap-0.5"><Star className="h-3 w-3 fill-amber-400 text-amber-400" />{Number(e.avg_rating).toFixed(1)}</span>
                           <span className="flex items-center gap-0.5"><Briefcase className="h-3 w-3" />{e.total_jobs ?? 0} jobs</span>
@@ -506,7 +646,7 @@ function BookService() {
 
           {/* Payment method */}
           <div className="rounded-2xl border bg-card p-5">
-            <Step n={5} title="Payment method" />
+            <Step n={6} title="Payment method" />
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
               <button onClick={() => setPaymentMethod("CASH")} className={cn(
                 "flex items-center gap-3 rounded-xl border-2 p-4 text-left transition-colors",
@@ -550,6 +690,15 @@ function BookService() {
         <div>
           <div className="sticky top-20 rounded-2xl border bg-card p-5">
             <h3 className="font-semibold">Order summary</h3>
+            {surgeMultiplier > 1.05 && (
+              <div className="mt-3 flex items-center gap-2 rounded-xl bg-amber-500/10 border border-amber-500/20 p-3 text-xs text-amber-500 animate-pulse">
+                <Zap className="h-4 w-4 shrink-0 fill-amber-500 text-amber-500" />
+                <div>
+                  <span className="font-bold">Peak Demand Surge Active</span>
+                  <p className="text-[10px] text-amber-500/80 font-medium">Rates are adjusted by {surgeMultiplier}x due to high local demand.</p>
+                </div>
+              </div>
+            )}
             <div className="mt-4 space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">
@@ -583,6 +732,26 @@ function BookService() {
           </div>
         </div>
       </div>
+
+      <Dialog open={showOfflineWarning} onOpenChange={setShowOfflineWarning}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Expert is Offline</DialogTitle>
+            <DialogDescription>
+              {selectedExpert?.name} is currently offline. You cannot book them for an instant service right now.
+              <br /><br />
+              Do you want to wait and assign this booking directly to them for when they come back online?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowOfflineWarning(false)}>Cancel</Button>
+            <Button onClick={() => {
+              setShowOfflineWarning(false);
+              confirm(true);
+            }}>Wait for Expert</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

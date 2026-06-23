@@ -60,6 +60,18 @@ export const dispatchService = {
     enqueueDispatchRetry(bookingId, attempt);
   },
 
+  // Immediately attempt to assign an expert — no delay.
+  // Used when an expert comes online and we already know there are SEARCHING bookings.
+  async dispatchImmediate(bookingId) {
+    try {
+      await this.attemptAssign({ bookingId, attempt: 1 });
+    } catch (err) {
+      console.error(`[dispatch] Immediate dispatch failed for booking ${bookingId}:`, err);
+      // Fall back to the retry queue so the booking doesn't get stuck.
+      this.scheduleRetry(bookingId, 1);
+    }
+  },
+
   // Worker processor: try to assign an expert; re-enqueue if none yet.
   async attemptAssign({ bookingId, attempt = 1 }) {
     try {
@@ -68,6 +80,7 @@ export const dispatchService = {
       const match = await this.findBestExpert(booking.service_id, { lat: booking.lat, lng: booking.lng });
       if (!match) {
         if (attempt < MAX_RETRIES) enqueueDispatchRetry(bookingId, attempt + 1);
+        else console.log(`[dispatch] Booking ${bookingId}: exhausted ${MAX_RETRIES} retries, will re-dispatch when an expert comes online.`);
         return;
       }
 
@@ -80,7 +93,14 @@ export const dispatchService = {
       emitToBooking(bookingId, 'booking_assigned', { status: 'ASSIGNED', eta_minutes: eta, expert_id: match.expert.id });
       await notify(booking.customer_id, { type: 'booking_assigned', title: 'Expert assigned', body: `Your expert is arriving in ~${eta} min.`, bookingId });
       await notify(match.expert.id, { type: 'job_assigned', title: 'New job assigned', body: 'You have a new booking.', bookingId });
-    } catch { /* best-effort; stop retrying on hard error */ }
+      console.log(`[dispatch] Booking ${bookingId} → assigned to expert ${match.expert.id} (ETA ${eta} min)`);
+    } catch (err) {
+      console.error(`[dispatch] attemptAssign error for booking ${bookingId}:`, err);
+      // Re-enqueue on transient errors instead of silently dropping.
+      if (attempt < MAX_RETRIES) {
+        enqueueDispatchRetry(bookingId, attempt + 1);
+      }
+    }
   },
 
   isActiveStatus(status) {

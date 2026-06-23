@@ -8,6 +8,7 @@ const router = Router();
 router.use(authMiddleware);
 
 router.get('/',             asyncHandler(bookingController.list));
+router.get('/surge-check',   asyncHandler(bookingController.surgeCheck));
 router.post('/',            asyncHandler(bookingController.create));
 router.get('/:id',          asyncHandler(bookingController.getOne));
 router.get('/:id/invoice',  asyncHandler(bookingController.getInvoice));

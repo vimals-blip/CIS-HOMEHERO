@@ -1,6 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
-  Menu, X, LogOut, Home, BookOpen, LayoutDashboard, Settings, Sparkles, ChevronDown, User, Wallet, LifeBuoy,
+  Menu, X, LogOut, Home, BookOpen, LayoutDashboard, Settings, Sparkles, ChevronDown, User, Wallet, LifeBuoy, Sun, Moon,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -14,6 +14,7 @@ import {
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { playUISound } from "@/lib/sound-ui";
 
 const customerLinks = [
   { to: "/", label: "Home", icon: Home },
@@ -36,9 +37,33 @@ export function Navbar() {
   const { user, role, signOut } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const currentPath = useRouterState().location.pathname;
+  const [theme, setTheme] = useState<"light" | "dark">("dark");
 
   const isAdmin = role === "ADMIN" || role === "SUPER_ADMIN";
   const links = isAdmin ? adminLinks : role === "EXPERT" ? expertLinks : customerLinks;
+
+  useEffect(() => {
+    const stored = localStorage.getItem("theme") as "light" | "dark" | null;
+    const initialTheme = stored || "dark";
+    setTheme(initialTheme);
+    if (initialTheme === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    playUISound("click");
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    localStorage.setItem("theme", next);
+    if (next === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  };
 
   // Pull profile (name + avatar) for the user menu.
   const { data: me } = useQuery({
@@ -51,9 +76,8 @@ export function Navbar() {
   useEffect(() => { setMobileOpen(false); }, [currentPath]);
 
   return (
-    <header className="sticky top-0 z-50 w-full">
-      <div className="border-b border-border/60 bg-background/80 shadow-sm backdrop-blur-xl supports-[backdrop-filter]:bg-background/70">
-        <div className="container mx-auto flex h-16 items-center justify-between gap-4 px-4">
+    <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/60 backdrop-blur-md shadow-sm">
+      <div className="container mx-auto flex h-16 items-center justify-between gap-4 px-4">
           <Link to="/" className="group flex shrink-0 items-center gap-2.5">
             <div className="grid h-9 w-9 place-items-center rounded-xl bg-primary text-primary-foreground shadow-md shadow-primary/30 transition-transform group-hover:scale-105">
               <Sparkles className="h-4 w-4" />
@@ -78,7 +102,14 @@ export function Navbar() {
             })}
           </nav>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={toggleTheme}
+              className="grid h-9 w-9 place-items-center rounded-xl text-muted-foreground transition-all hover:bg-muted hover:text-foreground hover:scale-105 active:scale-95 shrink-0"
+              aria-label="Toggle Theme"
+            >
+              {theme === "dark" ? <Sun className="h-4.5 w-4.5 text-amber-400" /> : <Moon className="h-4.5 w-4.5 text-indigo-500" />}
+            </button>
             {user && <NotificationBell />}
             {user ? (
               <DropdownMenu>
@@ -123,7 +154,6 @@ export function Navbar() {
             </button>
           </div>
         </div>
-      </div>
 
       {mobileOpen && (
         <div className="fixed inset-0 top-16 z-40 bg-background/98 backdrop-blur-xl md:hidden">
@@ -133,6 +163,25 @@ export function Navbar() {
                 <l.icon className="h-4 w-4" /> {l.label}
               </Link>
             ))}
+            <div className="flex items-center justify-between border-t border-border pt-4 pb-2">
+              <span className="text-sm font-medium text-muted-foreground">Appearance</span>
+              <button
+                onClick={toggleTheme}
+                className="flex items-center gap-2 rounded-xl border bg-muted/40 px-4 py-2 text-sm font-semibold text-foreground transition-all hover:bg-muted active:scale-95"
+              >
+                {theme === "dark" ? (
+                  <>
+                    <Sun className="h-4 w-4 text-amber-400" />
+                    <span>Light Theme</span>
+                  </>
+                ) : (
+                  <>
+                    <Moon className="h-4 w-4 text-indigo-500" />
+                    <span>Dark Theme</span>
+                  </>
+                )}
+              </button>
+            </div>
             <div className="space-y-2 border-t pt-4">
               {user ? (
                 <Button variant="outline" className="w-full" onClick={signOut}><LogOut className="mr-2 h-4 w-4" /> Sign out</Button>

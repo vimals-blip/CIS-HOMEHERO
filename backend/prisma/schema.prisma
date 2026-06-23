@@ -498,3 +498,16 @@ model audit_logs {
   @@index([created_at])
   @@index([actor_id])
 }
+
+model ai_interactions {
+  id             String   @id @default(uuid()) @db.VarChar(50)
+  user_id        String?  @db.VarChar(50)
+  service_id     String?  @db.VarChar(50)
+  user_prompt    String   @db.Text
+  ai_response    Json
+  final_outcome  Json?
+  user_feedback  Int?
+  created_at     DateTime @default(now()) @db.DateTime(0)
+
+  @@index([created_at])
+}

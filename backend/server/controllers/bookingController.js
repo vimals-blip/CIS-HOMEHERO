@@ -3,6 +3,7 @@ import { BookingModel } from '../models/BookingModel.js';
 import { ServiceModel } from '../models/ServiceModel.js';
 import { ExpertModel } from '../models/ExpertModel.js';
 import { AddressModel } from '../models/AddressModel.js';
+import { aiService } from '../services/aiService.js';
 import { WalletModel } from '../models/WalletModel.js';
 import { CouponModel } from '../models/CouponModel.js';
 import { PaymentModel } from '../models/PaymentModel.js';
@@ -54,6 +55,43 @@ function format(row) {
 }
 
 export const bookingController = {
+  async surgeCheck(req, res) {
+    const { service_id } = req.query;
+    if (!service_id) throw BadRequest('MISSING_FIELDS', 'service_id is required.');
+    const service = await ServiceModel.findById(service_id);
+    if (!service) throw NotFound('Service not found.');
+
+    const activeBookings = await prisma.bookings.count({
+      where: { status: { in: ['SEARCHING', 'ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'IN_PROGRESS'] } }
+    });
+    const onlineExperts = await prisma.experts.count({
+      where: { status: 'ONLINE' }
+    });
+
+    const hour = new Date().getHours();
+    const isWeekend = [0, 6].includes(new Date().getDay());
+
+    const multiplier = await aiService.getSurgeMultiplier({
+      active_bookings_5km: activeBookings || 5,
+      online_experts_5km: onlineExperts || 2,
+      hour_of_day: hour,
+      is_weekend: isWeekend
+    });
+
+    const baseRate = Number(service.rate_per_hour);
+    const surgeRate = round2(baseRate * multiplier);
+
+    res.json({
+      service_id,
+      base_rate: baseRate,
+      surge_rate: surgeRate,
+      multiplier,
+      is_surge_active: multiplier > 1.05,
+      active_bookings: activeBookings,
+      online_experts: onlineExperts
+    });
+  },
+
   async list(req, res) {
     let rows;
     if (req.user.role === 'EXPERT') {
@@ -148,7 +186,24 @@ export const bookingController = {
     if (!snapshot) throw BadRequest('MISSING_ADDRESS', 'Provide address_id or address_snapshot.');
 
     // ── Pricing: base → coupon discount → total → fee split ──────────────────
-    const base = round2(Number(service.rate_per_hour) * duration);
+    // Get live surge multiplier from Python microservice
+    const activeBookings = await prisma.bookings.count({
+      where: { status: { in: ['SEARCHING', 'ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'IN_PROGRESS'] } }
+    });
+    const onlineExperts = await prisma.experts.count({
+      where: { status: 'ONLINE' }
+    });
+    const hour = new Date().getHours();
+    const isWeekend = [0, 6].includes(new Date().getDay());
+
+    const multiplier = await aiService.getSurgeMultiplier({
+      active_bookings_5km: activeBookings || 5,
+      online_experts_5km: onlineExperts || 2,
+      hour_of_day: hour,
+      is_weekend: isWeekend
+    });
+
+    const base = round2(Number(service.rate_per_hour) * multiplier * duration);
 
     let discount = 0;
     let couponRow = null;
@@ -179,10 +234,12 @@ export const bookingController = {
     // Dispatch: prefer a customer-requested expert if they are available.
     let expert = null;
     let etaMinutes = null;
-    if (!holdForPayment) {
-      if (preferred_expert_id) {
-        const preferredRow = await ExpertModel.findById(preferred_expert_id);
-        if (preferredRow && preferredRow.status === 'ONLINE' && !Boolean(preferredRow.is_blocked)) {
+    const { wait_for_offline_expert = false } = req.body;
+
+    if (preferred_expert_id) {
+      const preferredRow = await ExpertModel.findById(preferred_expert_id);
+      if (preferredRow && !Boolean(preferredRow.is_blocked)) {
+        if (preferredRow.status === 'ONLINE') {
           const activeBusyCount = await prisma.bookings.count({
             where: {
               expert_id: preferred_expert_id,
@@ -193,13 +250,23 @@ export const bookingController = {
             expert = preferredRow;
             etaMinutes = booking_type === 'INSTANT' ? randomEta() : null;
           }
+        } else if (wait_for_offline_expert) {
+          expert = preferredRow;
+          etaMinutes = null; // No ETA since they are offline
         }
       }
-      if (!expert) {
-        const match = await dispatchService.findBestExpert(service_id, { lat: latVal, lng: lngVal });
-        expert = match?.expert ?? null;
-        etaMinutes = expert && booking_type === 'INSTANT' ? dispatchService.etaMinutes(match.distance) : null;
-      }
+    }
+
+    if (!holdForPayment && !expert) {
+      const match = await dispatchService.findBestExpert(service_id, { lat: latVal, lng: lngVal });
+      expert = match?.expert ?? null;
+      etaMinutes = expert && booking_type === 'INSTANT' ? dispatchService.etaMinutes(match.distance) : null;
+    }
+    
+    // If we're holding for payment and didn't force a preferred expert, ensure expert is null.
+    if (holdForPayment && !preferred_expert_id) {
+      expert = null;
+      etaMinutes = null;
     }
     const assigned = Boolean(expert);
     const status = assigned ? 'ASSIGNED' : 'SEARCHING';

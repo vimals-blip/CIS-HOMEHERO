@@ -5,7 +5,6 @@
 ---
 
 ## Table of Contents
-
 1. [What Is HomeHero?](#1-what-is-homehero)
 2. [Technology Stack — What Each Tool Is and Why We Use It](#2-technology-stack)
 3. [First-Time Local Setup](#3-first-time-local-setup)
@@ -1057,7 +1056,6 @@ async function findBestExpert(serviceId, bookingCoords) {
   // 1. All online, non-busy experts who offer this service
   const candidates = await ExpertModel.findCandidatesForService(serviceId);
   if (!candidates.length) return null;
-
   // 2. Score by distance (Haversine formula = great-circle km)
   const scored = candidates.map(expert => {
     const distance = (expert.current_lat && bookingCoords?.lat)
@@ -1513,10 +1511,8 @@ useEffect(() => {
   if (!socket) return;
 
   socket.emit("subscribe_booking", bookingId);
-
   const onLocation = ({ lat, lng }: any) => setExpertLoc({ lat, lng });
   const onStatus   = ({ status }: any) => qc.invalidateQueries({ queryKey: ["booking", bookingId] });
-
   socket.on("expert_location_updated", onLocation);
   socket.on("booking_status_updated",  onStatus);
 
@@ -2225,7 +2221,7 @@ openssl rand -hex 32
 grep NODE_ENV backend/.env
 
 # 3. ALLOWED_ORIGINS is your domain (not localhost or *)
-grep ALLOWED_ORIGINS backend/.env
+grep ALLOWED_ORIGINS backend/.env1
 
 # 4. MySQL user has minimal privileges
 mysql -u root -p -e "SHOW GRANTS FOR 'homehero'@'localhost';"
