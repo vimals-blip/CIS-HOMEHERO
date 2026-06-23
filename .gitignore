@@ -39,3 +39,4 @@ dist-ssr
 
 # Locally-stored uploads (KYC docs etc.) — use S3 in production
 backend/uploads/
+ai-services/venv
