@@ -13,7 +13,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell, PieChart, Pie, Legend,
 } from "recharts";
-import { apiFetch, uploadFile } from "@/lib/api";
+import { apiFetch, uploadFile, API_BASE, getAccessToken } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { Avatar } from "@/components/shared/Avatar";
@@ -402,6 +402,16 @@ function AdminDashboard() {
     },
     onError: (e: any) => toast.error(e.message),
   });
+  const toggleServiceTrained = useMutation({
+    mutationFn: ({ serviceId, is_trained }: { serviceId: string; is_trained: boolean }) =>
+      apiFetch(`/admin/experts/${detailExpertId}/services/${serviceId}`, { method: "PATCH", body: JSON.stringify({ is_trained }) }),
+    onSuccess: () => {
+      toast.success("Service training status updated");
+      qc.invalidateQueries({ queryKey: ["admin-expert-detail", detailExpertId] });
+      qc.invalidateQueries({ queryKey: ["admin-experts"] });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
 
   // Booking detail panel
   const [detailBookingId, setDetailBookingId] = useState<string | null>(null);
@@ -429,6 +439,29 @@ function AdminDashboard() {
     },
     onError: (e: any) => toast.error(e.message),
   });
+
+  const handleDownloadPdf = async (bookingId: string) => {
+    try {
+      const toastId = toast.loading("Generating invoice PDF...");
+      const token = getAccessToken();
+      const res = await fetch(`${API_BASE}/bookings/${bookingId}/invoice/pdf`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error("Failed to download");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `invoice-${bookingId.slice(-8).toUpperCase()}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success("PDF downloaded!", { id: toastId });
+    } catch (e: any) {
+      toast.error("Failed to download PDF invoice.");
+    }
+  };
 
   // User detail drawer
   const [detailUserId, setDetailUserId] = useState<string | null>(null);
@@ -573,6 +606,22 @@ function AdminDashboard() {
       <Sidebar active={section} onChange={setSection} data={data} isSuperAdmin={isSuperAdmin} />
       <div className="flex-1 overflow-auto">
         <div className="mx-auto max-w-[1600px] px-6 py-8">
+          {/* Mobile section navigation */}
+          <div className="mb-6 flex overflow-x-auto rounded-xl border bg-card p-1 shadow-sm lg:hidden [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
+            {NAV.filter((n) => !(n as any).superOnly || isSuperAdmin).map((n) => (
+              <button
+                key={n.id}
+                onClick={() => setSection(n.id)}
+                className={cn(
+                  "whitespace-nowrap flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors",
+                  section === n.id ? "bg-primary text-primary-foreground shadow" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+              >
+                <n.icon className="h-4 w-4" />
+                {n.label}
+              </button>
+            ))}
+          </div>
 
           {section === "overview" && (
             <div className="space-y-8">
@@ -636,7 +685,7 @@ function AdminDashboard() {
                 </div>
               </div>
               <div className="grid gap-6 lg:grid-cols-2">
-                <div className="overflow-hidden rounded-2xl border bg-card">
+                <div className="overflow-x-auto rounded-2xl border bg-card">
                   <div className="border-b px-5 py-4"><h3 className="font-semibold">Recent bookings</h3></div>
                   <div className="divide-y">
                     {recent.slice(0, 6).length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">No bookings yet</p> :
@@ -658,7 +707,7 @@ function AdminDashboard() {
                       ))}
                   </div>
                 </div>
-                <div className="overflow-hidden rounded-2xl border bg-card">
+                <div className="overflow-x-auto rounded-2xl border bg-card">
                   <div className="flex items-center justify-between border-b px-5 py-4">
                     <h3 className="font-semibold">KYC queue</h3>
                     <Button variant="ghost" size="sm" className="text-xs" onClick={() => setSection("kyc")}>Review all</Button>
@@ -879,7 +928,7 @@ function AdminDashboard() {
                 </Select>
               </div>
               {expLoading ? <div className="flex h-40 items-center justify-center"><LoadingSpinner /></div> : (
-                <div className="overflow-hidden rounded-2xl border bg-card">
+                <div className="overflow-x-auto rounded-2xl border bg-card">
                   <table className="w-full text-sm">
                     <thead className="bg-muted/30 text-xs font-medium text-muted-foreground">
                       <tr>
@@ -942,7 +991,7 @@ function AdminDashboard() {
                       ))}
                     </div>
                     {bookingsLoading ? <div className="flex h-40 items-center justify-center"><LoadingSpinner /></div> : (
-                      <div className="overflow-hidden rounded-2xl border bg-card">
+                      <div className="overflow-x-auto rounded-2xl border bg-card">
                         <table className="w-full text-sm">
                           <thead className="bg-muted/30 text-xs font-medium text-muted-foreground">
                             <tr>
@@ -1001,7 +1050,7 @@ function AdminDashboard() {
                 </div>
               </div>
               {usersLoading ? <div className="flex h-40 items-center justify-center"><LoadingSpinner /></div> : (
-                <div className="overflow-hidden rounded-2xl border bg-card">
+                <div className="overflow-x-auto rounded-2xl border bg-card">
                   <table className="w-full text-sm">
                     <thead className="bg-muted/30 text-xs font-medium text-muted-foreground">
                       <tr><th className="px-5 py-3.5 text-left">User</th><th className="px-5 py-3.5 text-left">Role</th><th className="px-5 py-3.5 text-left">City</th><th className="px-5 py-3.5 text-left">Phone</th><th className="px-5 py-3.5 text-right"></th></tr>
@@ -1254,7 +1303,7 @@ function AdminDashboard() {
               </Dialog>
 
               {servicesLoading ? <div className="py-12 text-center"><LoadingSpinner /></div> : (
-                <div className="overflow-hidden rounded-2xl border bg-card">
+                <div className="overflow-x-auto rounded-2xl border bg-card">
                   <table className="w-full text-sm">
                     <thead className="bg-muted/30 text-xs font-medium text-muted-foreground">
                       <tr>
@@ -1351,7 +1400,7 @@ function AdminDashboard() {
               {(data?.coupons ?? []).length === 0 ? (
                 <div className="flex flex-col items-center gap-2 rounded-2xl border bg-muted/20 py-16"><Ticket className="h-8 w-8 text-muted-foreground" /><p className="text-sm text-muted-foreground">No coupons yet.</p></div>
               ) : (
-                <div className="overflow-hidden rounded-2xl border bg-card">
+                <div className="overflow-x-auto rounded-2xl border bg-card">
                   <table className="w-full text-sm">
                     <thead className="bg-muted/30 text-xs font-medium text-muted-foreground">
                       <tr><th className="px-5 py-3.5 text-left">Code</th><th className="px-5 py-3.5 text-left">Discount</th><th className="px-5 py-3.5 text-left">Usage</th><th className="px-5 py-3.5 text-left">Status</th><th className="px-5 py-3.5 text-right">Action</th></tr>
@@ -1380,7 +1429,7 @@ function AdminDashboard() {
               {wdLoading ? <div className="flex h-40 items-center justify-center"><LoadingSpinner /></div> : (withdrawals as any[]).length === 0 ? (
                 <div className="flex flex-col items-center gap-2 rounded-2xl border bg-muted/20 py-16"><Wallet className="h-8 w-8 text-muted-foreground" /><p className="text-sm text-muted-foreground">No withdrawal requests.</p></div>
               ) : (
-                <div className="overflow-hidden rounded-2xl border bg-card">
+                <div className="overflow-x-auto rounded-2xl border bg-card">
                   <table className="w-full text-sm">
                     <thead className="bg-muted/30 text-xs font-medium text-muted-foreground">
                       <tr><th className="px-5 py-3.5 text-left">Expert</th><th className="px-5 py-3.5 text-left">Amount</th><th className="px-5 py-3.5 text-left">Bank</th><th className="px-5 py-3.5 text-left">Status</th><th className="px-5 py-3.5 text-right">Action</th></tr>
@@ -1579,7 +1628,7 @@ function AdminDashboard() {
               <div>
                 <SectionHead title="Platform settings" desc="Configuration & CMS" />
                 {settingsLoading ? <div className="flex h-32 items-center justify-center"><LoadingSpinner /></div> : (
-                  <div className="overflow-hidden rounded-2xl border bg-card">
+                  <div className="overflow-x-auto rounded-2xl border bg-card">
                     <table className="w-full text-sm">
                       <thead className="bg-muted/30 text-xs font-medium text-muted-foreground"><tr><th className="px-5 py-3 text-left">Key</th><th className="px-5 py-3 text-left">Value</th><th className="px-5 py-3 text-left">Public</th><th className="px-5 py-3 text-right">Save</th></tr></thead>
                       <tbody>
@@ -1711,7 +1760,7 @@ function AdminDashboard() {
               {auditLoading ? <div className="flex h-40 items-center justify-center"><LoadingSpinner /></div> : (auditLogs as any[]).length === 0 ? (
                 <div className="flex flex-col items-center gap-2 rounded-2xl border bg-muted/20 py-16"><ScrollText className="h-8 w-8 text-muted-foreground" /><p className="text-sm text-muted-foreground">No audit entries.</p></div>
               ) : (
-                <div className="overflow-hidden rounded-2xl border bg-card">
+                <div className="overflow-x-auto rounded-2xl border bg-card">
                   <table className="w-full text-sm">
                     <thead className="bg-muted/30 text-xs font-medium text-muted-foreground">
                       <tr><th className="px-5 py-3.5 text-left">When</th><th className="px-5 py-3.5 text-left">Actor</th><th className="px-5 py-3.5 text-left">Action</th><th className="px-5 py-3.5 text-left">Target</th><th className="px-5 py-3.5 text-left">Detail</th></tr>
@@ -1767,6 +1816,44 @@ function AdminDashboard() {
                     <FileText className="mr-1.5 h-4 w-4" /> Print report
                   </Button>
                 )}
+                <Button 
+                  variant="default" 
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                  onClick={async () => {
+                    try {
+                      const toastId = toast.loading("Generating AI Business Intelligence Report...");
+                      const token = getAccessToken();
+                      const res = await fetch(`${API_BASE}/admin/reports/ai-pdf`, {
+                        headers: { Authorization: `Bearer ${token}` }
+                      });
+                      
+                      if (!res.ok) {
+                        let errMessage = res.statusText;
+                        try {
+                          const body = await res.json();
+                          errMessage = body?.message || body?.error || errMessage;
+                        } catch { /* ignore */ }
+                        throw new Error(`[${res.status}] ${errMessage}`);
+                      }
+                      
+                      const blob = await res.blob();
+                      const url = window.URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `HomeHero_Business_Intelligence.pdf`;
+                      document.body.appendChild(a);
+                      a.click();
+                      a.remove();
+                      window.URL.revokeObjectURL(url);
+                      toast.success("AI Report downloaded successfully!", { id: toastId });
+                    } catch (err: any) {
+                      console.error(err);
+                      toast.error(`Failed to download AI report: ${err.message}`);
+                    }
+                  }}
+                >
+                  <Star className="mr-1.5 h-4 w-4" /> Download AI BI Report
+                </Button>
               </div>
 
               {/* Print styles */}
@@ -1782,7 +1869,7 @@ function AdminDashboard() {
 
                   {/* Revenue report */}
                   {reportData.type === "revenue" && (
-                    <div className="overflow-hidden rounded-2xl border bg-card">
+                    <div className="overflow-x-auto rounded-2xl border bg-card">
                       <table className="w-full text-sm">
                         <thead className="bg-muted/30 text-xs font-medium text-muted-foreground">
                           <tr><th className="px-4 py-3 text-left">Date</th><th className="px-4 py-3 text-right">Bookings</th><th className="px-4 py-3 text-right">Revenue (₹)</th><th className="px-4 py-3 text-right">Platform fee (₹)</th><th className="px-4 py-3 text-right">Expert payout (₹)</th></tr>
@@ -1817,14 +1904,14 @@ function AdminDashboard() {
                   {/* Bookings breakdown */}
                   {reportData.type === "bookings" && (
                     <div className="space-y-4">
-                      <div className="overflow-hidden rounded-2xl border bg-card">
+                      <div className="overflow-x-auto rounded-2xl border bg-card">
                         <div className="border-b bg-muted/30 px-4 py-2 text-xs font-semibold uppercase text-muted-foreground">By status</div>
                         <table className="w-full text-sm">
                           <thead><tr className="border-b"><th className="px-4 py-3 text-left text-muted-foreground">Status</th><th className="px-4 py-3 text-right text-muted-foreground">Count</th></tr></thead>
                           <tbody>{(reportData.data.by_status as any[]).map((r: any) => <tr key={r.status} className="border-t hover:bg-muted/20"><td className="px-4 py-3"><span className={cn("inline-block rounded-full px-2 py-0.5 text-xs font-medium", STATUS_PILL[r.status] ?? "bg-slate-100 text-slate-700")}>{r.status}</span></td><td className="px-4 py-3 text-right font-semibold">{r.count}</td></tr>)}</tbody>
                         </table>
                       </div>
-                      <div className="overflow-hidden rounded-2xl border bg-card">
+                      <div className="overflow-x-auto rounded-2xl border bg-card">
                         <div className="border-b bg-muted/30 px-4 py-2 text-xs font-semibold uppercase text-muted-foreground">By service</div>
                         <table className="w-full text-sm">
                           <thead><tr className="border-b"><th className="px-4 py-3 text-left text-muted-foreground">Service</th><th className="px-4 py-3 text-right text-muted-foreground">Bookings</th><th className="px-4 py-3 text-right text-muted-foreground">Revenue (₹)</th></tr></thead>
@@ -1836,7 +1923,7 @@ function AdminDashboard() {
 
                   {/* Top experts */}
                   {reportData.type === "experts" && (
-                    <div className="overflow-hidden rounded-2xl border bg-card">
+                    <div className="overflow-x-auto rounded-2xl border bg-card">
                       <table className="w-full text-sm">
                         <thead className="bg-muted/30 text-xs font-medium text-muted-foreground">
                           <tr><th className="px-4 py-3 text-left">Expert</th><th className="px-4 py-3 text-right">Rating</th><th className="px-4 py-3 text-right">Total jobs</th><th className="px-4 py-3 text-right">Period jobs</th><th className="px-4 py-3 text-right">Period earnings (₹)</th></tr>
@@ -1859,7 +1946,7 @@ function AdminDashboard() {
 
                   {/* Services summary */}
                   {reportData.type === "services" && (
-                    <div className="overflow-hidden rounded-2xl border bg-card">
+                    <div className="overflow-x-auto rounded-2xl border bg-card">
                       <table className="w-full text-sm">
                         <thead className="bg-muted/30 text-xs font-medium text-muted-foreground">
                           <tr><th className="px-4 py-3 text-left">Service</th><th className="px-4 py-3 text-right">Rate/hr</th><th className="px-4 py-3 text-right">Fee %</th><th className="px-4 py-3 text-right">Bookings</th><th className="px-4 py-3 text-right">Revenue (₹)</th><th className="px-4 py-3 text-right">Platform earnings (₹)</th></tr>
@@ -1950,21 +2037,44 @@ function AdminDashboard() {
               </div>
 
               {(data?.services ?? []).length > 0 && (
-                <div className="rounded-xl border p-4">
-                  <div className="text-[10px] font-semibold uppercase text-muted-foreground mb-2">Services offered</div>
-                  <div className="flex flex-wrap gap-2">
-                    {(data?.services ?? []).map((s: any) => {
-                      const checked = expertServiceIds.includes(s.id);
-                      return (
-                        <label key={s.id} className={cn(
-                          "flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-                          checked ? "border-primary/40 bg-primary/5 text-primary" : "border-border text-muted-foreground",
-                        )}>
-                          <input type="checkbox" className="hidden" checked={checked} onChange={(e) => setExpertServiceIds(e.target.checked ? [...expertServiceIds, s.id] : expertServiceIds.filter((id) => id !== s.id))} />
-                          {s.name}
-                        </label>
-                      );
-                    })}
+                <div className="rounded-xl border p-4 space-y-4">
+                  <div>
+                    <div className="text-[10px] font-semibold uppercase text-muted-foreground mb-2">Training Status</div>
+                    <div className="flex flex-col gap-2">
+                      {(detailExpert.services || []).map((es: any) => {
+                        const svc = (data?.services ?? []).find((s: any) => s.id === es.service_id);
+                        if (!expertServiceIds.includes(es.service_id)) return null; // removed locally
+                        return (
+                          <div key={es.service_id} className="flex items-center justify-between bg-muted/20 rounded-lg p-2 px-3 border border-border/50">
+                            <span className="text-xs font-medium">{svc?.name || es.service_id}</span>
+                            <label className="flex items-center gap-1.5 cursor-pointer text-xs">
+                              <input type="checkbox" checked={es.is_trained} onChange={(e) => toggleServiceTrained.mutate({ serviceId: es.service_id, is_trained: e.target.checked })} />
+                              {es.is_trained ? <span className="text-emerald-600 font-semibold">Trained</span> : <span className="text-amber-600 font-semibold">Pending Training</span>}
+                            </label>
+                          </div>
+                        );
+                      })}
+                      {(detailExpert.services || []).filter((es: any) => expertServiceIds.includes(es.service_id)).length === 0 && (
+                        <div className="text-xs text-muted-foreground">No active services. Select below and save changes first.</div>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-semibold uppercase text-muted-foreground mb-2">Add / Remove Services (Requires Save)</div>
+                    <div className="flex flex-wrap gap-2">
+                      {(data?.services ?? []).map((s: any) => {
+                        const checked = expertServiceIds.includes(s.id);
+                        return (
+                          <label key={s.id} className={cn(
+                            "flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                            checked ? "border-primary/40 bg-primary/5 text-primary" : "border-border text-muted-foreground",
+                          )}>
+                            <input type="checkbox" className="hidden" checked={checked} onChange={(e) => setExpertServiceIds(e.target.checked ? [...expertServiceIds, s.id] : expertServiceIds.filter((id) => id !== s.id))} />
+                            {s.name}
+                          </label>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               )}
@@ -2037,6 +2147,11 @@ function AdminDashboard() {
                       <MapPin className="h-3.5 w-3.5" /> Track live
                     </Button>
                   </a>
+                  {detailBooking.status === "COMPLETED" && (
+                    <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={() => handleDownloadPdf(detailBooking.id)} title="Download PDF Invoice">
+                      <FileText className="h-3.5 w-3.5" /> PDF
+                    </Button>
+                  )}
                 </div>
               </div>
 

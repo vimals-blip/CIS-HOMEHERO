@@ -42,12 +42,19 @@ export const ExpertModel = {
     return rows.map((r) => r.service_id);
   },
 
+  async getServices(expertId) {
+    return prisma.expert_services.findMany({
+      where: { expert_id: expertId },
+      select: { service_id: true, is_trained: true },
+    });
+  },
+
   async findAvailableForService(serviceId) {
     const online = await prisma.$queryRaw`
       SELECT e.* FROM experts e
       JOIN expert_services es ON es.expert_id = e.id
       JOIN users u ON u.id = e.id
-      WHERE es.service_id = ${serviceId} AND e.is_verified = 1 AND e.status = 'ONLINE' AND u.is_blocked = 0
+      WHERE es.service_id = ${serviceId} AND es.is_trained = 1 AND e.is_verified = 1 AND e.status = 'ONLINE' AND u.is_blocked = 0
       ORDER BY e.avg_rating DESC, e.total_jobs DESC
       LIMIT 1
     `;
@@ -57,7 +64,7 @@ export const ExpertModel = {
       SELECT e.* FROM experts e
       JOIN expert_services es ON es.expert_id = e.id
       JOIN users u ON u.id = e.id
-      WHERE es.service_id = ${serviceId} AND e.is_verified = 1 AND e.status <> 'BUSY' AND u.is_blocked = 0
+      WHERE es.service_id = ${serviceId} AND es.is_trained = 1 AND e.is_verified = 1 AND e.status <> 'BUSY' AND u.is_blocked = 0
       ORDER BY e.avg_rating DESC, e.total_jobs DESC
       LIMIT 1
     `;
@@ -73,7 +80,7 @@ export const ExpertModel = {
       FROM experts e
       JOIN expert_services es ON es.expert_id = e.id
       JOIN users u ON u.id = e.id
-      WHERE es.service_id = ${serviceId} AND e.is_verified = 1 AND e.status = 'ONLINE' AND u.is_blocked = 0
+      WHERE es.service_id = ${serviceId} AND es.is_trained = 1 AND e.is_verified = 1 AND e.status = 'ONLINE' AND u.is_blocked = 0
     `;
   },
 

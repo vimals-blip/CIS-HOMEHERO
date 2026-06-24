@@ -24,6 +24,11 @@ export const Route = createFileRoute("/bookings")({
 });
 
 const ACTIVE = ["SEARCHING", "ASSIGNED", "ON_THE_WAY", "ARRIVED", "IN_PROGRESS"];
+
+// Helper to determine if an online booking is stuck pending payment.
+function isUnpaidOnline(b: any) {
+  return b.payment_method === "ONLINE" && b.payment_status === "PENDING";
+}
 const TABS = [
   { id: "active", label: "Active" },
   { id: "completed", label: "Completed" },
@@ -32,11 +37,12 @@ const TABS = [
 ] as const;
 type Tab = typeof TABS[number]["id"];
 
-function matchesTab(status: string, tab: Tab) {
+function matchesTab(b: any, tab: Tab) {
+  const isUnpaid = isUnpaidOnline(b);
   if (tab === "all") return true;
-  if (tab === "active") return ACTIVE.includes(status);
-  if (tab === "completed") return status === "COMPLETED";
-  return status === "CANCELLED";
+  if (tab === "active") return ACTIVE.includes(b.status) && !isUnpaid;
+  if (tab === "completed") return b.status === "COMPLETED";
+  return b.status === "CANCELLED" || (isUnpaid && b.status === "SEARCHING");
 }
 
 function BookingsPage() {
@@ -77,19 +83,19 @@ function BookingsPage() {
   
   // Counts
   const counts = {
-    active: all.filter((b) => ACTIVE.includes(b.status)).length,
+    active: all.filter((b) => ACTIVE.includes(b.status) && !isUnpaidOnline(b)).length,
     completed: all.filter((b) => b.status === "COMPLETED").length,
-    cancelled: all.filter((b) => b.status === "CANCELLED").length,
+    cancelled: all.filter((b) => b.status === "CANCELLED" || (isUnpaidOnline(b) && b.status === "SEARCHING")).length,
     all: all.length,
   };
 
   const totalSpent = all.filter((b) => b.status === "COMPLETED").reduce((s, b) => s + Number(b.total_amount), 0);
   
   // Separate live active bookings for top shelf display
-  const liveBookings = all.filter((b) => ACTIVE.includes(b.status));
+  const liveBookings = all.filter((b) => ACTIVE.includes(b.status) && !isUnpaidOnline(b));
   
   // Filter for history list based on selected tab
-  const filtered = all.filter((b) => matchesTab(b.status, tab));
+  const filtered = all.filter((b) => matchesTab(b, tab));
   
   // Paginated items
   const totalPages = Math.ceil(filtered.length / itemsPerPage);
@@ -182,7 +188,7 @@ function BookingsPage() {
       )}
 
       {/* Booking History Section */}
-      <div className="mt-10">
+      <div id="tour-bookings-list" className="mt-10">
         <h2 className="text-xl font-bold text-foreground mb-4">Booking History</h2>
         
         {/* Tab Controls */}

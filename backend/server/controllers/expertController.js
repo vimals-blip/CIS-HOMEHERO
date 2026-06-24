@@ -40,8 +40,42 @@ export const expertController = {
   async getOne(req, res) {
     const row = await ExpertModel.findById(req.params.id);
     if (!row) throw NotFound('Expert not found.');
-    const serviceIds = await ExpertModel.getServiceIds(req.params.id);
-    res.json({ ...format(row), service_ids: serviceIds });
+    const services = await ExpertModel.getServices(req.params.id);
+    res.json({ 
+      ...format(row), 
+      service_ids: services.map(s => s.service_id),
+      services 
+    });
+  },
+
+  async addService(req, res) {
+    const { id } = req.params;
+    const { service_id } = req.body;
+    if (!service_id) throw BadRequest('MISSING_FIELDS', 'service_id is required.');
+    if (req.user.id !== id && !isAdmin(req.user)) throw Forbidden();
+    
+    // Check if it already exists
+    const existing = await prisma.expert_services.findUnique({
+      where: { expert_id_service_id: { expert_id: id, service_id } }
+    });
+    if (!existing) {
+      await prisma.expert_services.create({
+        data: { expert_id: id, service_id, is_trained: false }
+      });
+      audit(req, 'EXPERT_SERVICE_ADDED', { entityType: 'expert', entityId: id, detail: service_id });
+    }
+    res.json({ status: 'added' });
+  },
+
+  async removeService(req, res) {
+    const { id, serviceId } = req.params;
+    if (req.user.id !== id && !isAdmin(req.user)) throw Forbidden();
+    
+    await prisma.expert_services.deleteMany({
+      where: { expert_id: id, service_id: serviceId }
+    });
+    audit(req, 'EXPERT_SERVICE_REMOVED', { entityType: 'expert', entityId: id, detail: serviceId });
+    res.json({ status: 'removed' });
   },
 
   // Expert toggles their availability.

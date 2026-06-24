@@ -12,6 +12,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/lib/auth-context";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
+import { OnboardingTour } from "@/components/home/OnboardingTour";
 
 import appCss from "../styles.css?url";
 
@@ -171,6 +172,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <GlobalStyles />
+        <OnboardingTour />
         <AppLayout />
         <Toaster richColors position="top-right" />
       </AuthProvider>

@@ -25,6 +25,7 @@ router.delete('/users/:userId', superAdmin, asyncHandler(adminController.deleteU
 // Audit trail — super-admin only.
 router.get('/audit-logs', superAdmin, asyncHandler(adminController.getAuditLogs));
 router.get('/reports',        asyncHandler(adminController.getReport));
+router.get('/reports/ai-pdf', asyncHandler(adminController.downloadAiReportPdf));
 router.get('/bookings',              asyncHandler(adminController.getBookings));
 router.get('/bookings/:id',          asyncHandler(adminController.getBookingDetail));
 router.post('/bookings/:id/assign',  asyncHandler(adminController.assignBooking));

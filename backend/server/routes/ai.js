@@ -66,16 +66,21 @@ router.post('/diagnostic/analyze', async (req, res, next) => {
   try {
     const { description, service_id } = req.body;
     
-    // Fetch global_gemini_api_key from CMS settings
-    const geminiSetting = await prisma.settings.findUnique({
-      where: { setting_key: 'global_gemini_api_key' }
-    });
-    const apiKey = geminiSetting?.setting_value || process.env.GEMINI_API_KEY || '';
+    // Fetch global_grok_api_key and global_groq_api_key from CMS settings
+    const grokSetting = await prisma.settings.findUnique({ where: { setting_key: 'global_grok_api_key' } });
+    const groqSetting = await prisma.settings.findUnique({ where: { setting_key: 'global_groq_api_key' } });
+    
+    const grokKey = grokSetting?.setting_value || process.env.GROK_API_KEY || '';
+    const groqKey = groqSetting?.setting_value || process.env.GROQ_API_KEY || '';
+    
+    const provider = groqKey ? 'groq' : 'grok';
+    const apiKey = groqKey || grokKey;
 
     const analysis = await aiService.analyzeDiagnostic({
       description: String(description ?? ''),
       service_id: String(service_id ?? ''),
-      api_key: apiKey
+      api_key: apiKey,
+      provider: provider
     });
     
     // Asynchronously log the interaction to build our training dataset

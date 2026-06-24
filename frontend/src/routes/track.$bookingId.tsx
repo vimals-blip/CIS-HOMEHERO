@@ -11,7 +11,7 @@ import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { Avatar } from "@/components/shared/Avatar";
 import { BookingTracker } from "@/components/booking/BookingTracker";
 import { LiveMap } from "@/components/booking/LiveMap";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, API_BASE, getAccessToken } from "@/lib/api";
 import { getSocket } from "@/lib/socket";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
@@ -140,6 +140,29 @@ function TrackBooking() {
     onSuccess: () => { toast.success("Thanks for your review!"); setReviewOpen(false); },
     onError: (e: any) => toast.error(e.message),
   });
+
+  const handleDownloadPdf = async () => {
+    try {
+      const toastId = toast.loading("Generating PDF...");
+      const token = getAccessToken();
+      const res = await fetch(`${API_BASE}/bookings/${bookingId}/invoice/pdf`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error("Failed to download");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `invoice-${bookingId.slice(-8).toUpperCase()}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success("PDF downloaded!", { id: toastId });
+    } catch (e: any) {
+      toast.error("Failed to download PDF invoice.");
+    }
+  };
 
   if (loading || isLoading) return <div className="container mx-auto px-4 py-16"><LoadingSpinner /></div>;
   if (!booking) return <div className="container mx-auto px-4 py-16 text-center text-muted-foreground">Booking not found.</div>;
@@ -311,9 +334,14 @@ function TrackBooking() {
             </Button>
           )}
           {booking.status === "COMPLETED" && (
-            <Button variant="outline" className="w-full" onClick={() => window.open(`/invoice/${bookingId}`, "_blank")}>
-              <FileText className="mr-1 h-4 w-4" /> View invoice
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => window.open(`/invoice/${bookingId}`, "_blank")}>
+                <FileText className="mr-1 h-4 w-4" /> View HTML
+              </Button>
+              <Button variant="outline" className="flex-1" onClick={handleDownloadPdf}>
+                <FileText className="mr-1 h-4 w-4" /> Get PDF
+              </Button>
+            </div>
           )}
         </div>
       </div>

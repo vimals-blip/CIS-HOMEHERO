@@ -12,6 +12,7 @@ import { paymentProvider } from '../providers/paymentProvider.js';
 import { dispatchService } from '../services/dispatchService.js';
 import { emitToBooking } from '../realtime/io.js';
 import { notify } from '../services/notificationService.js';
+import { buildInvoicePdf } from '../services/pdfService.js';
 import { isAdmin } from '../middleware/auth.js';
 import { BadRequest, Forbidden, NotFound } from '../errors.js';
 
@@ -143,6 +144,49 @@ export const bookingController = {
       payment: { method: booking.payment_method, status: booking.payment_status },
       company: { name: 'HomeHero', tagline: 'Professional home services', email: 'support@homehero.in', phone: '+91-800-HOMEHERO' },
     });
+  },
+
+  async downloadInvoicePdf(req, res) {
+    const booking = await BookingModel.findById(req.params.id);
+    if (!booking) throw NotFound('Booking not found.');
+    if (!isAdmin(req.user) && booking.customer_id !== req.user.id && booking.expert_id !== req.user.id) {
+      throw Forbidden();
+    }
+    const base = Number(booking.base_amount);
+    const discount = Number(booking.discount_amount ?? 0);
+    const fee = Number(booking.platform_fee);
+    const total = Number(booking.total_amount);
+    const ratePerHour = Number(booking.duration_hours) > 0 ? round2(base / Number(booking.duration_hours)) : 0;
+    const lineItems = [
+      { description: `${booking.service_name} · ${Number(booking.duration_hours)} hr${Number(booking.duration_hours) !== 1 ? 's' : ''} @ ₹${ratePerHour}/hr`, amount: base },
+    ];
+    if (discount > 0) lineItems.push({ description: `Coupon discount (${booking.coupon_code})`, amount: -discount });
+    lineItems.push({ description: 'Platform fee', amount: fee });
+
+    const inv = {
+      invoice_number: `INV-${booking.id.toUpperCase().slice(-8)}`,
+      issued_at: new Date().toISOString(),
+      booking: {
+        id: booking.id, service_name: booking.service_name, booking_type: booking.booking_type,
+        scheduled_at: booking.scheduled_at, duration_hours: Number(booking.duration_hours), status: booking.status,
+      },
+      customer: { name: booking.customer_name, phone: booking.customer_phone },
+      expert: { name: booking.expert_name },
+      address: booking.address_snapshot,
+      line_items: lineItems,
+      totals: { base, discount, platform_fee: fee, total },
+      payment: { method: booking.payment_method, status: booking.payment_status },
+      company: { name: 'HomeHero', tagline: 'Professional home services', email: 'support@homehero.in', phone: '+91-800-HOMEHERO' },
+    };
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${inv.invoice_number}.pdf"`);
+
+    buildInvoicePdf(
+      inv,
+      (chunk) => res.write(chunk),
+      () => res.end()
+    );
   },
 
   async create(req, res) {
@@ -326,7 +370,9 @@ export const bookingController = {
       await notify(expert.id, { type: 'job_assigned', title: 'New job assigned', body: `${service.name} · ${snapshot}`, bookingId });
     } else {
       // No expert online right now — keep searching in the background.
-      dispatchService.scheduleRetry(bookingId);
+      if (!holdForPayment) {
+        dispatchService.scheduleRetry(bookingId);
+      }
     }
 
     // For online payments, create a gateway order (Razorpay or Stripe).

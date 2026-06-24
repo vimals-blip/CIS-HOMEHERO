@@ -127,7 +127,7 @@ function AccountPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mt-8">
         
         {/* Left Column - User Profile Card & Navigation Tabs Menu */}
-        <div className="lg:col-span-4 flex flex-col gap-6">
+        <div id="tour-account-settings" className="lg:col-span-4 flex flex-col gap-6">
           <div className="rounded-3xl border bg-card p-6 shadow-sm flex flex-col items-center text-center">
             
             {/* User Avatar Summary Header */}

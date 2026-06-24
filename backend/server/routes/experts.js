@@ -15,6 +15,10 @@ router.patch('/:id/status',     authMiddleware, asyncHandler(expertController.se
 router.patch('/:id/location',   authMiddleware, asyncHandler(expertController.setLocation));
 router.patch('/:id/profile',    authMiddleware, asyncHandler(expertController.updateProfile));
 
+// Services
+router.post('/:id/services',    authMiddleware, asyncHandler(expertController.addService));
+router.delete('/:id/services/:serviceId', authMiddleware, asyncHandler(expertController.removeService));
+
 // KYC documents (self or admin)
 router.get('/:id/upload-target', authMiddleware, asyncHandler(documentController.uploadTarget));
 router.get('/:id/documents',     authMiddleware, asyncHandler(documentController.list));

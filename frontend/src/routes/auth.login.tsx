@@ -33,6 +33,10 @@ function Login() {
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
 
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
+  const [onboardingName, setOnboardingName] = useState("");
+  const [onboardingEmail, setOnboardingEmail] = useState("");
+
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [fieldErr, setFieldErr] = useState<{ email?: string; password?: string }>({});
@@ -64,7 +68,6 @@ function Login() {
       onLogin(await apiFetch("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }));
     } catch (error: any) {
       const msg = error.message ?? "Login failed";
-      // Highlight the password field specifically for credential errors
       if (msg.toLowerCase().includes("invalid email or password") || msg.toLowerCase().includes("credentials")) {
         setFieldErr({ password: "Invalid email or password — please try again" });
       } else {
@@ -98,9 +101,36 @@ function Login() {
     if (otp.length < 4) { setErr("Enter the OTP"); return; }
     setLoading(true);
     try {
-      onLogin(await apiFetch("/auth/otp/verify", { method: "POST", body: JSON.stringify({ phone, otp }) }));
+      const result = await apiFetch("/auth/otp/verify", { method: "POST", body: JSON.stringify({ phone, otp }) });
+      if (!result?.accessToken) throw new Error("Login failed: invalid server response.");
+      setTokens(result.accessToken, result.refreshToken);
+      if (result.is_new) {
+        setNeedsOnboarding(true);
+      } else {
+        toast.success("Welcome back!");
+        const role = result.user?.role;
+        const dest = role === "ADMIN" || role === "SUPER_ADMIN" ? "/admin" : role === "EXPERT" ? "/expert" : "/";
+        navigate({ to: dest });
+      }
     } catch (error: any) {
       setErr(error.message ?? "Verification failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const completeProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErr(null);
+    if (onboardingName.trim().length < 2) { setErr("Enter your full name"); return; }
+    if (!/^\\S+@\\S+\\.\\S+$/.test(onboardingEmail)) { setErr("Enter a valid email address"); return; }
+    setLoading(true);
+    try {
+      await apiFetch("/profile", { method: "PATCH", body: JSON.stringify({ name: onboardingName, email: onboardingEmail }) });
+      toast.success("Profile complete!");
+      navigate({ to: "/" });
+    } catch (error: any) {
+      setErr(error.message ?? "Could not save profile");
     } finally {
       setLoading(false);
     }
@@ -116,9 +146,28 @@ function Login() {
         <p className="mt-1 text-sm text-muted-foreground">Log in to book or manage services</p>
       </div>
 
-      {/* Mode toggle */}
-      <div className="mt-8 flex gap-1 rounded-xl border bg-muted/40 p-1">
-        <button onClick={() => { setMode("otp"); setErr(null); setFieldErr({}); }} className={cn(
+      {needsOnboarding ? (
+        <form onSubmit={completeProfile} className="mt-8 space-y-4 rounded-2xl border bg-card p-6">
+          <div className="mb-2">
+            <h2 className="text-lg font-bold">Complete your profile</h2>
+            <p className="text-sm text-muted-foreground">Just a few more details to get started.</p>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="onboardingName">Full name</Label>
+            <Input id="onboardingName" value={onboardingName} onChange={(e) => setOnboardingName(e.target.value)} required placeholder="John Doe" autoFocus />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="onboardingEmail">Email address</Label>
+            <Input id="onboardingEmail" type="email" value={onboardingEmail} onChange={(e) => setOnboardingEmail(e.target.value)} required placeholder="john@example.com" />
+          </div>
+          {err && <ErrorBox message={err} />}
+          <Button type="submit" className="w-full" disabled={loading}>{loading ? "Saving…" : "Complete Setup"}</Button>
+        </form>
+      ) : (
+        <>
+          {/* Mode toggle */}
+          <div className="mt-8 flex gap-1 rounded-xl border bg-muted/40 p-1">
+            <button onClick={() => { setMode("otp"); setErr(null); setFieldErr({}); }} className={cn(
           "flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors",
           mode === "otp" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
         )}>
@@ -215,6 +264,8 @@ function Login() {
         {" · "}
         <Link to="/auth/signup-expert" className="font-medium text-primary hover:underline">Become an expert</Link>
       </div>
+        </>
+      )}
     </div>
   );
 }

@@ -77,6 +77,9 @@ export const dispatchService = {
     try {
       const booking = await BookingModel.findById(bookingId);
       if (!booking || booking.status !== 'SEARCHING') return; // assigned/cancelled meanwhile
+      // Do not dispatch if it's an online payment that hasn't been paid yet.
+      if (booking.payment_method === 'ONLINE' && booking.payment_status !== 'PAID') return;
+
       const match = await this.findBestExpert(booking.service_id, { lat: booking.lat, lng: booking.lng });
       if (!match) {
         if (attempt < MAX_RETRIES) enqueueDispatchRetry(bookingId, attempt + 1);

@@ -1,8 +1,8 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { Wallet, Briefcase, Star, TrendingUp, Wifi, WifiOff, MapPin, Clock, ShieldAlert, BanknoteArrowDown, Upload, CheckCircle2, XCircle, Clock3, FileUp, Loader2, Navigation, ChevronDown, ChevronUp, UserCircle, BellRing, ChevronLeft, ChevronRight, Lock, ShieldCheck, MessageSquare } from "lucide-react";
-import { apiFetch, uploadFile } from "@/lib/api";
+import { Wallet, Briefcase, Star, TrendingUp, Wifi, WifiOff, MapPin, Clock, ShieldAlert, BanknoteArrowDown, Upload, CheckCircle2, XCircle, Clock3, FileUp, Loader2, Navigation, ChevronDown, ChevronUp, UserCircle, BellRing, ChevronLeft, ChevronRight, Lock, ShieldCheck, MessageSquare, FileText } from "lucide-react";
+import { apiFetch, uploadFile, API_BASE, getAccessToken } from "@/lib/api";
 import { startBookingAlarm } from "@/lib/sound";
 import { getSocket } from "@/lib/socket";
 import { useAuth } from "@/lib/auth-context";
@@ -56,6 +56,7 @@ function ExpertDashboard() {
   const [uploadingType, setUploadingType] = useState<string | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileForm, setProfileForm] = useState({ name: "", bio: "", experience_years: "", gender: "" });
+  const [newServiceId, setNewServiceId] = useState("");
   const [historyPage, setHistoryPage] = useState(1);
   const [chatOpen, setChatOpen] = useState(false);
   const [chatRecipientId, setChatRecipientId] = useState<string | null>(null);
@@ -223,6 +224,34 @@ function ExpertDashboard() {
     queryFn: () => apiFetch(`/experts/${user!.id}/documents`),
   });
 
+  const { data: publicServices = [] } = useQuery({
+    enabled: !!user && role === "EXPERT",
+    queryKey: ["services"],
+    queryFn: () => apiFetch(`/services`),
+  });
+
+  const addService = useMutation({
+    mutationFn: (service_id: string) => apiFetch(`/experts/${user!.id}/services`, { method: "POST", body: JSON.stringify({ service_id }) }),
+    onSuccess: () => {
+      playUISound("success");
+      toast.success("Service added! Pending admin training.");
+      qc.invalidateQueries({ queryKey: ["expert-dashboard", user?.id] });
+    },
+    onError: (e: any) => {
+      playUISound("warning");
+      toast.error(e.message);
+    },
+  });
+
+  const removeService = useMutation({
+    mutationFn: (service_id: string) => apiFetch(`/experts/${user!.id}/services/${service_id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      toast.success("Service removed.");
+      qc.invalidateQueries({ queryKey: ["expert-dashboard", user?.id] });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   // Pick a file → upload it to storage → submit the returned URL as a KYC doc.
   async function handleDocFile(type: string, file?: File | null) {
     if (!file) return;
@@ -243,6 +272,29 @@ function ExpertDashboard() {
       setUploadingType(null);
     }
   }
+
+  const handleDownloadPdf = async (bookingId: string) => {
+    try {
+      const toastId = toast.loading("Generating invoice PDF...");
+      const token = getAccessToken();
+      const res = await fetch(`${API_BASE}/bookings/${bookingId}/invoice/pdf`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error("Failed to download");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `invoice-${bookingId.slice(-8).toUpperCase()}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success("PDF downloaded!", { id: toastId });
+    } catch (e: any) {
+      toast.error("Failed to download PDF invoice.");
+    }
+  };
 
   if (loading || (isLoading && role === "EXPERT")) return <div className="container mx-auto px-4 py-16"><LoadingSpinner /></div>;
   if (isError) return <div className="container mx-auto max-w-7xl px-4 py-20 text-center text-muted-foreground">Could not load your expert profile.</div>;
@@ -272,7 +324,7 @@ function ExpertDashboard() {
   return (
     <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10">
       {/* Operations Control Panel status banner */}
-      <div className={cn(
+      <div id="tour-expert-status" className={cn(
         "relative overflow-hidden rounded-3xl p-6 text-white shadow-xl transition-all duration-500 sm:p-8 hover:shadow-2xl border border-white/10",
         currentOnline 
           ? "bg-gradient-to-br from-emerald-600 via-teal-700 to-emerald-950" 
@@ -388,7 +440,7 @@ function ExpertDashboard() {
       )}
 
       {/* Stats Cards Grid with glowing color frame borders */}
-      <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-5">
+      <div id="tour-expert-stats" className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-5">
         {stats.map((s) => (
           <div key={s.label} className={cn(
             "relative overflow-hidden rounded-2xl border bg-card p-6 transition-all duration-300 hover-lift hover:border-solid",
@@ -466,6 +518,56 @@ function ExpertDashboard() {
             </Button>
           </div>
         )}
+      </div>
+
+      {/* My Services */}
+      <div className="mt-8 rounded-2xl border bg-card p-5">
+        <div className="flex items-center gap-2 text-sm font-semibold mb-4">
+          <Briefcase className="h-4 w-4 text-primary" /> My Services
+        </div>
+        <div className="space-y-3">
+          {(expert.services || []).map((es: any) => {
+            const svc = (publicServices as any[]).find((s) => s.id === es.service_id);
+            return (
+              <div key={es.service_id} className="flex items-center justify-between rounded-xl border bg-muted/20 px-4 py-3 text-sm">
+                <span className="font-medium">{svc?.name || es.service_id}</span>
+                <div className="flex items-center gap-3">
+                  <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold", es.is_trained ? "bg-emerald-500/12 text-emerald-700" : "bg-amber-500/12 text-amber-700")}>
+                    {es.is_trained ? "Active" : "Pending Training"}
+                  </span>
+                  <button onClick={() => removeService.mutate(es.service_id)} disabled={removeService.isPending} className="text-red-500 hover:text-red-600 text-xs font-semibold">Remove</button>
+                </div>
+              </div>
+            );
+          })}
+          {(expert.services || []).length === 0 && (
+            <div className="text-sm text-muted-foreground">You have not added any services yet.</div>
+          )}
+        </div>
+        <div className="mt-4 flex items-end gap-3">
+          <div className="flex-1">
+            <Label>Add a new service</Label>
+            <Select value={newServiceId} onValueChange={setNewServiceId}>
+              <SelectTrigger className="mt-1"><SelectValue placeholder="Select service..." /></SelectTrigger>
+              <SelectContent>
+                {(publicServices as any[])
+                  .filter((ps) => !(expert.services || []).some((es: any) => es.service_id === ps.id))
+                  .map((ps) => (
+                    <SelectItem key={ps.id} value={ps.id}>{ps.name}</SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Button 
+            disabled={!newServiceId || addService.isPending} 
+            onClick={() => {
+              addService.mutate(newServiceId);
+              setNewServiceId("");
+            }}
+          >
+            {addService.isPending ? "Adding..." : "Add"}
+          </Button>
+        </div>
       </div>
 
       {/* Earnings & withdrawals */}
@@ -623,7 +725,7 @@ function ExpertDashboard() {
         </DialogContent>
       </Dialog>
 
-      <h2 className="mt-10 flex items-center gap-3 text-lg font-bold tracking-tight">
+      <h2 id="tour-expert-jobs" className="mt-10 flex items-center gap-3 text-lg font-bold tracking-tight">
         <span>Active Dispatch Feed</span>
         {activeJobs.some((j) => j.status === "ASSIGNED") && (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 px-3 py-1 text-xs font-bold text-amber-600 animate-pulse">
@@ -774,6 +876,11 @@ function ExpertDashboard() {
                     <span className="text-sm sm:text-base font-extrabold text-foreground">₹{Number(b.expert_amount).toFixed(0)}</span>
                     <span className="block text-[10px] text-muted-foreground">earning</span>
                   </div>
+                  {b.status === "COMPLETED" && (
+                    <Button variant="ghost" size="icon" onClick={() => handleDownloadPdf(b.id)} title="Download PDF Invoice">
+                      <FileText className="h-4 w-4 text-muted-foreground" />
+                    </Button>
+                  )}
                 </div>
               </div>
             ))}

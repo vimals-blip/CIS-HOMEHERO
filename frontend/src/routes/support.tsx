@@ -243,6 +243,7 @@ function SupportPage() {
           <p className="mt-1.5 text-sm text-muted-foreground">Raise ticket issues or chat with support experts</p>
         </div>
         <Button 
+          id="tour-support-contact"
           onClick={() => setCreating((v) => !v)}
           className="rounded-xl bg-primary hover:bg-primary/95 shadow-sm font-bold"
         >

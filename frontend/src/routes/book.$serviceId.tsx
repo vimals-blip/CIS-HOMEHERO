@@ -382,7 +382,7 @@ function BookService() {
           </div>
 
           {/* AI Scope Assistant */}
-          <div className="rounded-2xl border bg-card p-5 relative overflow-hidden">
+          <div id="tour-ai-booking" className="rounded-2xl border bg-card p-5 relative overflow-hidden">
             <div className="absolute top-0 right-0 w-24 h-24 bg-primary/10 rounded-full blur-2xl pointer-events-none" />
             <div className="flex items-center justify-between">
               <Step n={2} title="AI Job Scope Assistant (Recommended)" hint="Let AI calculate the time and tools needed for your task" />

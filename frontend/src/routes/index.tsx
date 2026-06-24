@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import React, { useState } from "react";
 import {
   Clock, ShieldCheck, BadgeCheck, Star, ArrowRight, Quote,
   Sparkles, Users, Heart, Zap, ChevronDown, Download, MessageCircle,
@@ -102,8 +102,10 @@ function Home() {
       {/* Hero */}
       <section className="relative overflow-hidden bg-slate-950 text-white dark:bg-black py-16 md:py-24 lg:py-32 border-b border-white/5">
         {/* Soft radial glow backgrounds / Mesh */}
-        <div className="absolute -right-24 -top-24 h-[600px] w-[600px] rounded-full bg-primary/20 blur-[130px] opacity-75 pointer-events-none" />
-        <div className="absolute -bottom-32 -left-24 h-[500px] w-[500px] rounded-full bg-indigo-500/10 blur-[120px] opacity-60 pointer-events-none" />
+        <div className="absolute top-0 -left-4 w-72 h-72 bg-primary/30 rounded-full mix-blend-multiply filter blur-[100px] opacity-70 animate-blob pointer-events-none"></div>
+        <div className="absolute top-0 -right-4 w-72 h-72 bg-purple-500/30 rounded-full mix-blend-multiply filter blur-[100px] opacity-70 animate-blob animation-delay-2000 pointer-events-none"></div>
+        <div className="absolute -bottom-8 left-20 w-72 h-72 bg-indigo-500/30 rounded-full mix-blend-multiply filter blur-[100px] opacity-70 animate-blob animation-delay-4000 pointer-events-none"></div>
+        
         <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none [mask-image:radial-gradient(ellipse_60%_50%_at_50%_45%,#000_70%,transparent_100%)]" />
         
         <div className="container relative mx-auto px-4">
@@ -115,7 +117,7 @@ function Home() {
               </span>
               <h1 className="text-4xl font-extrabold leading-[1.15] md:text-6xl tracking-tight text-white">
                 Household help, <br />
-                <span className="bg-gradient-to-r from-primary-glow via-primary to-purple-400 bg-clip-text text-transparent glow-text-primary">
+                <span className="text-gradient glow-text-primary">
                   at your door in minutes
                 </span>
               </h1>
@@ -126,7 +128,7 @@ function Home() {
               
               {/* CTA Buttons */}
               <div className="mt-10 flex flex-wrap items-center gap-4 w-full sm:w-auto">
-                <Button asChild size="lg" className="h-14 px-8 rounded-2xl bg-primary hover:bg-primary/95 hover:scale-[1.02] active:scale-[0.98] transition-all text-white text-base font-semibold shadow-lg shadow-primary/30 w-full sm:w-auto">
+                <Button id="tour-book-service" asChild size="lg" className="h-14 px-8 rounded-2xl bg-primary hover:bg-primary/95 hover:scale-[1.02] active:scale-[0.98] transition-all text-white text-base font-semibold shadow-lg shadow-primary/30 w-full sm:w-auto">
                   <a href="#services">Book a service <ArrowRight className="ml-2 h-5 w-5" /></a>
                 </Button>
                 <Button asChild size="lg" variant="secondary" className="h-14 px-8 rounded-2xl bg-white/10 hover:bg-white/15 hover:scale-[1.02] active:scale-[0.98] transition-all text-white text-base font-semibold border border-white/15 backdrop-blur-md w-full sm:w-auto">
@@ -206,22 +208,22 @@ function Home() {
       </section>
 
       {/* Stats (Overlapping Card) */}
-      <section className="relative -mt-10 px-4 z-10">
+      <section className="relative -mt-10 px-4 z-10 reveal-up active">
         <div className="container mx-auto max-w-5xl">
-          <div className="rounded-3xl border bg-card/85 backdrop-blur-md p-8 md:p-10 shadow-xl grid grid-cols-2 gap-8 md:grid-cols-4">
+          <div className="rounded-3xl border border-border/50 bg-card/90 backdrop-blur-xl p-8 md:p-10 shadow-xl grid grid-cols-2 gap-8 md:grid-cols-4 items-start">
             {[
               { icon: Users, label: "Bookings completed", raw: 62, suffix: "L+", decimals: 0 },
               { icon: BadgeCheck, label: "Verified experts", raw: 15000, suffix: "+", decimals: 0 },
               { icon: Star, label: "Avg. rating", raw: 4.8, suffix: " / 5", decimals: 1 },
               { icon: Clock, label: "Avg. arrival", raw: 10, prefix: "~", suffix: " min", decimals: 0 },
             ].map((s) => (
-              <div key={s.label} className="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-4">
+              <div key={s.label} className="flex flex-col xl:flex-row items-center xl:items-start text-center xl:text-left gap-4 h-full justify-start">
                 <div className="grid h-12 w-12 place-items-center rounded-2xl bg-primary/10 text-primary shrink-0"><s.icon className="h-6 w-6" /></div>
-                <div>
-                  <div className="text-2xl font-extrabold text-foreground md:text-3xl">
+                <div className="flex flex-col justify-center">
+                  <div className="text-2xl font-extrabold text-foreground md:text-3xl whitespace-nowrap">
                     <AnimatedCounter value={s.raw} decimals={s.decimals} prefix={s.prefix} suffix={s.suffix} />
                   </div>
-                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mt-1">{s.label}</div>
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mt-1 leading-tight">{s.label}</div>
                 </div>
               </div>
             ))}
@@ -229,7 +231,40 @@ function Home() {
         </div>
       </section>
 
-      {/* Services */}
+      {/* Testimonials Marquee */}
+      <section className="py-12 border-y bg-muted/10 overflow-hidden relative">
+        <div className="absolute left-0 top-0 bottom-0 w-24 bg-gradient-to-r from-background to-transparent z-10"></div>
+        <div className="absolute right-0 top-0 bottom-0 w-24 bg-gradient-to-l from-background to-transparent z-10"></div>
+        <div className="flex w-max animate-marquee gap-6 px-6 hover:[animation-play-state:paused]">
+          {[...Array(2)].map((_, loopIdx) => (
+            <React.Fragment key={loopIdx}>
+              {[
+                { name: "Priya S.", text: "The expert arrived in exactly 12 minutes. Absolute lifesaver!" },
+                { name: "Rahul M.", text: "Sparkling clean kitchen! Verified and very professional." },
+                { name: "Anita K.", text: "I love the transparent pricing. Will definitely book again." },
+                { name: "Vikram R.", text: "Super fast dispatch. The app is incredibly easy to use." },
+                { name: "Neha D.", text: "Finally, a reliable platform for household help. Highly recommended." },
+              ].map((t, i) => (
+                <div key={i} className="flex-none w-80 p-5 rounded-2xl glass-card border border-border/50 hover-lift flex flex-col gap-3">
+                  <div className="flex gap-1 text-yellow-400">
+                    <Star className="w-4 h-4 fill-current" /><Star className="w-4 h-4 fill-current" /><Star className="w-4 h-4 fill-current" /><Star className="w-4 h-4 fill-current" /><Star className="w-4 h-4 fill-current" />
+                  </div>
+                  <p className="text-sm italic text-muted-foreground leading-relaxed">"{t.text}"</p>
+                  <div className="flex items-center gap-3 mt-1">
+                    <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary shrink-0">{t.name.charAt(0)}</div>
+                    <div>
+                      <div className="text-xs font-bold text-foreground">{t.name}</div>
+                      <div className="text-[10px] text-muted-foreground">Verified Customer</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </React.Fragment>
+          ))}
+        </div>
+      </section>
+
+      {/* Services Grid */}
       <section id="services" className="container mx-auto scroll-mt-24 px-4 py-20">
         <div className="mb-12 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>
@@ -291,27 +326,27 @@ function Home() {
       </section>
 
       {/* How it works */}
-      <section className="relative overflow-hidden border-y bg-muted/40 py-20">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,transparent_60%,var(--border)_100%)] opacity-30 pointer-events-none" />
+      <section className="relative overflow-hidden border-y bg-muted/20 py-24">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,transparent_60%,var(--primary)_150%)] opacity-20 pointer-events-none" />
         <div className="container mx-auto px-4 relative">
           <div className="text-center max-w-xl mx-auto">
-            <h2 className="text-3xl font-extrabold tracking-tight md:text-4xl text-foreground">How it works</h2>
-            <p className="mt-3 text-sm text-muted-foreground leading-relaxed">Book trusted help at your doorstep in three simple steps</p>
+            <h2 className="text-3xl font-extrabold tracking-tight md:text-4xl text-foreground reveal-up active">How it works</h2>
+            <p className="mt-3 text-sm text-muted-foreground leading-relaxed reveal-up active">Book trusted help at your doorstep in three simple steps</p>
           </div>
           
-          <div className="relative mx-auto mt-16 grid max-w-5xl gap-8 md:grid-cols-3">
+          <div className="relative mx-auto mt-16 grid max-w-5xl gap-8 md:grid-cols-3 reveal-up active">
             {/* Connecting line on desktop */}
-            <div className="absolute left-[15%] right-[15%] top-10 hidden h-[2px] bg-gradient-to-r from-primary/10 via-primary/30 to-primary/10 md:block" />
+            <div className="absolute left-[15%] right-[15%] top-10 hidden h-[2px] bg-gradient-to-r from-primary/10 via-primary to-primary/10 md:block opacity-50" />
             
             {[
               { icon: Sparkles, title: "1. Pick a service", desc: "Choose exactly what you need help with from our catalog." },
               { icon: Clock, title: "2. Choose duration", desc: "Select how many hours you need and choose instant or scheduled arrival." },
               { icon: ShieldCheck, title: "3. Expert arrives", desc: "Track your fully verified specialist on a map as they head to your location." },
             ].map((s, i) => (
-              <div key={s.title} className="group relative rounded-3xl border bg-card p-8 text-center transition-all duration-300 hover:shadow-lg hover:border-primary/20">
-                <div className="relative mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/30 group-hover:scale-105 transition-transform duration-300">
-                  <s.icon className="h-7 w-7" />
-                  <span className="absolute -right-2 -top-2 grid h-7 w-7 place-items-center rounded-full bg-background border border-primary/20 text-xs font-bold text-primary shadow-sm">{i + 1}</span>
+              <div key={s.title} className="group relative rounded-3xl glass-card p-8 text-center hover-lift hover-glow">
+                <div className="relative mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-gradient-to-tr from-primary to-primary-glow text-primary-foreground shadow-lg shadow-primary/30 group-hover:scale-110 transition-transform duration-500">
+                  <s.icon className="h-7 w-7 animate-pulse" />
+                  <span className="absolute -right-2 -top-2 grid h-7 w-7 place-items-center rounded-full bg-background border border-primary/30 text-xs font-bold text-primary shadow-md">{i + 1}</span>
                 </div>
                 <h3 className="mt-6 text-lg font-bold tracking-tight text-foreground">{s.title.substring(3)}</h3>
                 <p className="mt-3 text-sm text-muted-foreground leading-relaxed">{s.desc}</p>

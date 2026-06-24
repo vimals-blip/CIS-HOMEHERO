@@ -1,18 +1,17 @@
 from fastapi import APIRouter
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List
+import os
+import json
+from openai import OpenAI
 
 router = APIRouter()
 
 class DiagnosticRequest(BaseModel):
     description: str
     service_id: str
+    provider: str = "grok"
     api_key: str = ""
-
-import os
-import json
-import google.generativeai as genai
-from pydantic import BaseModel, Field
 
 class MatchCriteria(BaseModel):
     min_experience_years: int
@@ -27,13 +26,13 @@ class DiagnosticResponse(BaseModel):
 
 @router.post("/analyze")
 async def analyze_scope(payload: DiagnosticRequest):
-    active_key = payload.api_key or os.environ.get("GEMINI_API_KEY", "")
+    active_key = payload.api_key or os.environ.get("GROK_API_KEY", "") or os.environ.get("GROQ_API_KEY", "")
     if not active_key:
         # Fallback to simple default if no API key is set
         return {
             "recommended_hours": 2,
             "severity": "LOW",
-            "tools": ["Standard tools (Add GEMINI_API_KEY to use real AI)"],
+            "tools": ["Standard tools (Add GROK_API_KEY or GROQ_API_KEY to use real AI)"],
             "expert_match_criteria": {
                 "min_experience_years": 1,
                 "requires_background_check": True,
@@ -42,8 +41,13 @@ async def analyze_scope(payload: DiagnosticRequest):
         }
 
     try:
-        genai.configure(api_key=active_key)
-        model = genai.GenerativeModel("gemini-2.5-flash")
+        base_url = "https://api.groq.com/openai/v1" if payload.provider == "groq" else "https://api.x.ai/v1"
+        model_name = "llama-3.3-70b-versatile" if payload.provider == "groq" else "grok-2-latest"
+        
+        client = OpenAI(
+            api_key=active_key,
+            base_url=base_url,
+        )
         
         prompt = f"""
         You are an AI diagnostic assistant for a home services application. 
@@ -51,21 +55,22 @@ async def analyze_scope(payload: DiagnosticRequest):
         "{payload.description}"
         
         Carefully analyze this description to determine the job scope.
-        Respond with structured JSON matching the schema exactly.
+        Respond with structured JSON exactly matching the requested format.
         Limit recommended_hours to a maximum of 8.
         """
         
-        response = model.generate_content(
-            prompt,
-            generation_config=genai.GenerationConfig(
-                response_mime_type="application/json",
-                response_schema=DiagnosticResponse,
-            ),
+        response = client.chat.completions.create(
+            model=model_name,
+            messages=[
+                {"role": "system", "content": "You are a professional diagnostic AI. Always respond in pure JSON format."},
+                {"role": "user", "content": prompt}
+            ],
+            response_format={"type": "json_object"},
         )
         
-        return json.loads(response.text)
+        return json.loads(response.choices[0].message.content)
     except Exception as e:
-        print(f"Gemini API Error: {e}")
+        print(f"Grok API Error: {e}")
         # Return safe fallback if AI fails
         return {
             "recommended_hours": 2,

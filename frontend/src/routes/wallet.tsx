@@ -185,7 +185,7 @@ function WalletPage() {
 
       {/* Balance Card - Premium Digital Credit Card */}
       <div className="space-y-8">
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-tr from-accent via-primary to-primary-glow p-8 text-accent-foreground shadow-xl border border-white/5">
+      <div id="tour-wallet-balance" className="relative overflow-hidden rounded-3xl bg-gradient-to-tr from-accent via-primary to-primary-glow p-8 text-accent-foreground shadow-xl border border-white/5">
         {/* Glow overlay elements */}
         <div className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-white/10 blur-2xl pointer-events-none" />
         <div className="absolute right-1/4 bottom-0 h-32 w-32 rounded-full bg-white/5 blur-xl pointer-events-none" />

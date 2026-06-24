@@ -81,9 +81,10 @@ export const authController = {
     const otp = String(Math.floor(100000 + Math.random() * 900000));
     const otpHash = await bcrypt.hash(otp, 10);
     await AuthModel.createOtp(phone, otpHash, new Date(Date.now() + OTP_TTL_MS));
-    await smsProvider.sendOtp(phone, otp);
+    const result = await smsProvider.sendOtp(phone, otp);
 
-    res.json({ sent: true, phone, dev_otp: devOtp(otp) });
+    const useDevOtp = result.channel === 'mock' || !result.sent;
+    res.json({ sent: true, phone, dev_otp: useDevOtp ? devOtp(otp) : undefined });
   },
 
   async verifyOtp(req, res) {

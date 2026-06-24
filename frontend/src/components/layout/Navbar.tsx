@@ -76,7 +76,10 @@ export function Navbar() {
   useEffect(() => { setMobileOpen(false); }, [currentPath]);
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/60 backdrop-blur-md shadow-sm">
+    <header className={cn(
+      "sticky top-0 z-50 w-full border-b border-border/40 shadow-sm transition-colors duration-200",
+      mobileOpen ? "bg-background" : "bg-background/60 backdrop-blur-md"
+    )}>
       <div className="container mx-auto flex h-16 items-center justify-between gap-4 px-4">
           <Link to="/" className="group flex shrink-0 items-center gap-2.5">
             <div className="grid h-9 w-9 place-items-center rounded-xl bg-primary text-primary-foreground shadow-md shadow-primary/30 transition-transform group-hover:scale-105">
@@ -114,7 +117,7 @@ export function Navbar() {
             {user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="flex items-center gap-2 rounded-xl px-2 py-1.5 transition-colors hover:bg-muted">
+                  <button id="tour-user-menu" className="flex items-center gap-2 rounded-xl px-2 py-1.5 transition-colors hover:bg-muted">
                     <Avatar src={me?.avatar_url} name={me?.name || user.email} size={32} />
                     <ChevronDown className="hidden h-3.5 w-3.5 text-muted-foreground sm:block" />
                   </button>
@@ -142,7 +145,7 @@ export function Navbar() {
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
-              <div className="hidden items-center gap-2 md:flex">
+              <div id="tour-auth-buttons" className="hidden items-center gap-2 md:flex">
                 <Button asChild variant="ghost" size="sm"><Link to="/auth/login">Log in</Link></Button>
                 <Button asChild size="sm" className="shadow-sm shadow-primary/30"><Link to="/auth/signup-customer">Sign up</Link></Button>
               </div>
@@ -156,7 +159,7 @@ export function Navbar() {
         </div>
 
       {mobileOpen && (
-        <div className="fixed inset-0 top-16 z-40 bg-background/98 backdrop-blur-xl md:hidden">
+        <div className="fixed inset-0 top-16 z-40 overflow-y-auto bg-background md:hidden">
           <div className="container mx-auto space-y-2 px-4 py-6">
             {links.map((l) => (
               <Link key={l.to} to={l.to} className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium hover:bg-muted">

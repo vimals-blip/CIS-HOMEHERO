@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, API_BASE, getAccessToken } from "@/lib/api";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 
 export const Route = createFileRoute("/invoice/$bookingId")({
@@ -25,14 +25,46 @@ function InvoicePage() {
   const subtotal = inv.totals.base;
   const total = inv.totals.total;
 
+  const handleDownloadPdf = async () => {
+    try {
+      const token = getAccessToken();
+      const res = await fetch(`${API_BASE}/bookings/${bookingId}/invoice/pdf`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      
+      if (!res.ok) {
+        let errMessage = res.statusText;
+        try {
+          const body = await res.json();
+          errMessage = body?.message || body?.error || errMessage;
+        } catch { /* ignore */ }
+        throw new Error(`[${res.status}] ${errMessage}`);
+      }
+      
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `invoice-${bookingId.slice(-8).toUpperCase()}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      console.error(err);
+      alert(`Failed to download PDF invoice: ${err.message}`);
+    }
+  };
+
   return (
     <>
-      {/* Print button — hidden when printing */}
       <button
-        onClick={() => window.print()}
+        onClick={handleDownloadPdf}
         className="no-print fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors"
       >
-        🖨 Print / Save PDF
+        🖨 Download PDF Invoice
       </button>
 
       <style>{`

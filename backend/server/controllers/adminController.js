@@ -13,6 +13,7 @@ import { notify } from '../services/notificationService.js';
 import { emitToBooking } from '../realtime/io.js';
 import { BadRequest, Conflict, NotFound } from '../errors.js';
 import { invalidateGatewayCache } from '../providers/paymentProvider.js';
+import { buildAiReportPdf } from '../services/reportPdfService.js';
 
 export const adminController = {
   async getOverview(_req, res) {
@@ -227,8 +228,8 @@ export const adminController = {
     const { id } = req.params;
     const expert = await ExpertModel.findById(id);
     if (!expert) throw NotFound('Expert not found.');
-    const [serviceIds, profile, bookings, transactions, documents] = await Promise.all([
-      ExpertModel.getServiceIds(id),
+    const [services, profile, bookings, transactions, documents] = await Promise.all([
+      ExpertModel.getServices(id),
       UserModel.getProfile(id),
       BookingModel.findForExpert(id),
       WalletModel.transactionsForUser(id, 20),
@@ -251,7 +252,8 @@ export const adminController = {
       avatar_url: profile?.avatar_url ?? expert.avatar_url ?? null,
       is_blocked: Boolean(expert.is_blocked),
       created_at: expert.created_at,
-      service_ids: serviceIds,
+      service_ids: services.map(s => s.service_id),
+      services: services,
       bookings: (bookings ?? []).slice(0, 10),
       transactions: transactions ?? [],
       documents: documents ?? [],
@@ -296,6 +298,31 @@ export const adminController = {
     }
     audit(req, 'EXPERT_UPDATED', { entityType: 'expert', entityId: id });
     res.json({ status: 'updated' });
+  },
+
+  async setExpertServiceTrainingStatus(req, res) {
+    const { id, serviceId } = req.params;
+    const { is_trained } = req.body;
+    
+    if (typeof is_trained !== 'boolean') {
+      throw BadRequest('INVALID_BODY', 'is_trained must be a boolean.');
+    }
+
+    const expert = await ExpertModel.findById(id);
+    if (!expert) throw NotFound('Expert not found.');
+
+    const existing = await prisma.expert_services.findUnique({
+      where: { expert_id_service_id: { expert_id: id, service_id: serviceId } }
+    });
+    if (!existing) throw NotFound('Service not found for this expert.');
+
+    await prisma.expert_services.update({
+      where: { expert_id_service_id: { expert_id: id, service_id: serviceId } },
+      data: { is_trained }
+    });
+
+    audit(req, 'EXPERT_SERVICE_TRAINED_TOGGLED', { entityType: 'expert', entityId: id, detail: `${serviceId} -> ${is_trained}` });
+    res.json({ status: 'updated', is_trained });
   },
 
   async deleteExpert(req, res) {
@@ -476,5 +503,95 @@ export const adminController = {
     }
     invalidateGatewayCache();
     res.json({ status: 'saved' });
+  },
+
+  async downloadAiReportPdf(req, res) {
+    // 1. Gather raw data from DB
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const sixtyDaysAgo = new Date();
+    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+
+    const [
+      totalUsers, totalExperts, totalBookings, revenueSum,
+      bookingsByStatus, expertsByStatus, topServices,
+      recentBookings, recentRevenue,
+      previousBookings, previousRevenue
+    ] = await Promise.all([
+      prisma.user_roles.count({ where: { role: 'CUSTOMER' } }),
+      prisma.experts.count(),
+      prisma.bookings.count(),
+      prisma.bookings.aggregate({ _sum: { total_amount: true, platform_fee: true } }),
+      prisma.bookings.groupBy({ by: ['status'], _count: { id: true } }),
+      prisma.experts.groupBy({ by: ['status'], _count: { id: true } }),
+      prisma.bookings.groupBy({ by: ['service_id'], _count: { id: true }, orderBy: { _count: { id: 'desc' } }, take: 5 }),
+      prisma.bookings.count({ where: { created_at: { gte: thirtyDaysAgo } } }),
+      prisma.bookings.aggregate({ where: { created_at: { gte: thirtyDaysAgo } }, _sum: { total_amount: true, platform_fee: true } }),
+      prisma.bookings.count({ where: { created_at: { gte: sixtyDaysAgo, lt: thirtyDaysAgo } } }),
+      prisma.bookings.aggregate({ where: { created_at: { gte: sixtyDaysAgo, lt: thirtyDaysAgo } }, _sum: { total_amount: true, platform_fee: true } }),
+    ]);
+
+    const data = {
+      total_users: totalUsers,
+      total_experts: totalExperts,
+      total_bookings: totalBookings,
+      total_revenue: revenueSum._sum.total_amount || 0,
+      total_platform_fee: revenueSum._sum.platform_fee || 0,
+      bookings_by_status: bookingsByStatus,
+      experts_by_status: expertsByStatus,
+      top_services: topServices,
+      last_30_days: {
+        bookings: recentBookings,
+        revenue: recentRevenue._sum.total_amount || 0,
+        platform_fee: recentRevenue._sum.platform_fee || 0,
+      },
+      previous_30_days: {
+        bookings: previousBookings,
+        revenue: previousRevenue._sum.total_amount || 0,
+        platform_fee: previousRevenue._sum.platform_fee || 0,
+      }
+    };
+
+    // 2. Fetch AI Insights
+    const AI_BASE = 'http://127.0.0.1:8000/api/v1'; // Assuming ai-services runs locally
+    let aiInsights;
+    try {
+      const grokSetting = await prisma.settings.findUnique({ where: { setting_key: 'global_grok_api_key' } });
+      const groqSetting = await prisma.settings.findUnique({ where: { setting_key: 'global_groq_api_key' } });
+      
+      const grokKey = grokSetting?.setting_value || '';
+      const groqKey = groqSetting?.setting_value || '';
+      
+      const provider = groqKey ? 'groq' : 'grok';
+      const apiKey = groqKey || grokKey;
+
+      const aiRes = await fetch(`${AI_BASE}/reports/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ metrics: data, api_key: apiKey, provider })
+      });
+      if (!aiRes.ok) throw new Error('AI Service error');
+      aiInsights = await aiRes.json();
+    } catch (e) {
+      console.error("AI Report generation failed:", e);
+      aiInsights = {
+        executive_summary: "AI service unavailable. Could not generate comprehensive insights.",
+        revenue_analysis: "Unavailable.",
+        operational_efficiency: "Unavailable.",
+        expert_performance: "Unavailable.",
+        strategic_recommendations: ["Ensure ai-services is running on port 8000 and GEMINI_API_KEY is configured."]
+      };
+    }
+
+    // 3. Generate PDF
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="Business_Intelligence_Report.pdf"`);
+    
+    buildAiReportPdf(
+      data,
+      aiInsights,
+      (chunk) => res.write(chunk),
+      () => res.end()
+    );
   },
 };
